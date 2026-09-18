@@ -10,7 +10,7 @@
 <body>
 
 <header>
-  <h1>👑 王への請願 <span style="font-size: 0.6rem; color: var(--color-text-dim); font-weight: normal;">v1.0.6</span></h1>
+  <h1>👑 王への請願 <span style="font-size: 0.6rem; color: var(--color-text-dim); font-weight: normal;">v1.1.0</span></h1>
   <div id="connection-status" style="font-size: 0.8rem; color: var(--color-text-dim);">未接続</div>
 </header>
 
@@ -157,7 +157,14 @@ function createInitialState(hostName) {
     deck: buildInitialDeck(), // cardId -> 残り枚数
     claimedBy: {}, // cardId -> playerId
     winner: null,
+    keptSnapshotAfterRoll: null,
   };
+}
+
+// 直前のROLLからさらにキープが増えていなければ、次のROLL/CONFIRMは不可
+function canRollAgain() {
+  if (!state || !state.keptSnapshotAfterRoll) return true; // 初回ROLL前はOK
+  return state.kept.some((k, i) => k && !state.keptSnapshotAfterRoll[i]);
 }
 
 // ---- ロビー：部屋作成 ----
@@ -248,9 +255,21 @@ function handleIncomingData(data) {
   } else if (data.type === "SYNC" && !p2p.isHost) {
     const prevPhase = state ? state.phase : null;
     const prevTurnIdx = state ? state.turnIdx : null;
-    state = data.state;
-    handleSoundTriggers(data.event);
-    render();
+    if (data.event === "dice_rolled") {
+      const els = document.querySelectorAll(".dice-3d");
+      els.forEach((el, i) => {
+        if (state && !state.kept[i]) el.classList.add("rolling");
+      });
+      setTimeout(() => {
+        state = data.state;
+        handleSoundTriggers(data.event);
+        render();
+      }, 600);
+    } else {
+      state = data.state;
+      handleSoundTriggers(data.event);
+      render();
+    }
   } else if (data.type === "ACTION" && p2p.isHost) {
     handleHostAction(data);
   }
@@ -259,7 +278,7 @@ function handleIncomingData(data) {
 // ホストが受け取ったアクションを処理し、正としての判定を行う
 function handleHostAction(data) {
   if (data.action === "ROLL") {
-    executeRoll();
+    if (canRollAgain()) executeRoll();
   } else if (data.action === "TOGGLE_KEEP") {
     if (isCurrentTurn(data.senderPlayerId)) {
       state.kept[data.idx] = !state.kept[data.idx];
@@ -335,7 +354,7 @@ function handleSoundTriggers(event) {
 // ---- ダイスロール ----
 function handleRollDice() {
   trace("handleRollDice clicked isMyTurn=" + isMyTurn() + " phase=" + (state && state.phase));
-  if (!isMyTurn() || state.phase !== "rolling") return;
+  if (!isMyTurn() || state.phase !== "rolling" || !canRollAgain()) return;
   playSound("diceRoll");
   if (p2p.isHost) {
     executeRoll();
@@ -356,8 +375,9 @@ function executeRoll() {
     try {
       trace("setTimeout fired, updating dice");
       state.dice = state.dice.map((v, i) => (state.kept[i] ? v : Math.floor(Math.random() * 6) + 1));
+      state.keptSnapshotAfterRoll = state.kept.slice();
       trace("dice updated to " + JSON.stringify(state.dice));
-      broadcastState();
+      broadcastState("dice_rolled");
     } catch (e) {
       const dbgEl = document.getElementById("debug-info");
       if (dbgEl) {
@@ -470,6 +490,7 @@ function nextTurn() {
   state.dice = new Array(totalCount).fill(1).map(() => Math.floor(Math.random() * 6) + 1);
   state.kept = new Array(totalCount).fill(false);
   state.phase = "rolling";
+  state.keptSnapshotAfterRoll = null;
 
   broadcastState("turn_changed");
 }
@@ -693,7 +714,7 @@ function render() {
   });
 
   const canAct = myTurn && !state.winner;
-  document.getElementById("btn-roll").disabled = !canAct || state.phase !== "rolling";
+  document.getElementById("btn-roll").disabled = !canAct || state.phase !== "rolling" || !canRollAgain();
   document.getElementById("btn-confirm").disabled = !canAct || state.phase !== "rolling" || !state.kept.some(k => k);
 
   renderEffectsPanel();
