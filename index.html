@@ -10,7 +10,7 @@
 <body>
 
 <header>
-  <h1>👑 王への請願 <span style="font-size: 0.6rem; color: var(--color-text-dim); font-weight: normal;">v1.4.1</span></h1>
+  <h1>👑 王への請願 <span style="font-size: 0.6rem; color: var(--color-text-dim); font-weight: normal;">v1.4.2</span></h1>
   <div id="connection-status" style="font-size: 0.8rem; color: var(--color-text-dim);">未接続</div>
 </header>
 
@@ -57,7 +57,10 @@
         <button class="secondary" onclick="openRuleModal()">📖 ルール</button>
       </div>
 
-      <div id="debug-info" style="font-size:0.65rem; color:#888; word-break:break-all; margin-bottom:10px; padding:6px; background:rgba(0,0,0,0.2); border-radius:6px;"></div>
+      <details style="margin-bottom:10px;">
+        <summary style="font-size:0.7rem; color:#666; cursor:pointer;">デバッグ情報（調査用）</summary>
+        <div id="debug-info" style="font-size:0.65rem; color:#888; word-break:break-all; padding:6px; background:rgba(0,0,0,0.2); border-radius:6px;"></div>
+      </details>
 
       <div class="play-area">
         <h3>手元のダイス（クリックで確保/解除）</h3>
