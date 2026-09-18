@@ -10,7 +10,7 @@
 <body>
 
 <header>
-  <h1>👑 王への請願 <span style="font-size: 0.6rem; color: var(--color-text-dim); font-weight: normal;">v1.0.2</span></h1>
+  <h1>👑 王への請願 <span style="font-size: 0.6rem; color: var(--color-text-dim); font-weight: normal;">v1.0.3</span></h1>
   <div id="connection-status" style="font-size: 0.8rem; color: var(--color-text-dim);">未接続</div>
 </header>
 
@@ -302,10 +302,27 @@ function trace(msg) {
 function broadcastState(event) {
   trace("broadcastState start isHost=" + p2p.isHost);
   if (!p2p.isHost) return;
-  p2p.send({ type: "SYNC", state: state, event: event });
-  trace("p2p.send done");
+  try {
+    p2p.send({ type: "SYNC", state: state, event: event });
+    trace("p2p.send done");
+  } catch (e) {
+    const dbgEl = document.getElementById("debug-info");
+    if (dbgEl) {
+      dbgEl.textContent = "[CAUGHT in p2p.send] " + (e && e.message ? e.message : String(e)) + " | " + (e && e.stack ? e.stack.slice(0, 300) : "");
+      dbgEl.style.color = "#ff6b6b";
+    }
+    return;
+  }
   handleSoundTriggers(event);
-  render();
+  try {
+    render();
+  } catch (e) {
+    const dbgEl = document.getElementById("debug-info");
+    if (dbgEl) {
+      dbgEl.textContent = "[CAUGHT in render] " + (e && e.message ? e.message : String(e)) + " | " + (e && e.stack ? e.stack.slice(0, 300) : "");
+      dbgEl.style.color = "#ff6b6b";
+    }
+  }
 }
 
 // SEトリガーの再生（送信元と受信先の両方で同じイベント名から同じ音を鳴らす）
@@ -336,10 +353,18 @@ function executeRoll() {
   });
 
   setTimeout(() => {
-    trace("setTimeout fired, updating dice");
-    state.dice = state.dice.map((v, i) => (state.kept[i] ? v : Math.floor(Math.random() * 6) + 1));
-    trace("dice updated to " + JSON.stringify(state.dice));
-    broadcastState();
+    try {
+      trace("setTimeout fired, updating dice");
+      state.dice = state.dice.map((v, i) => (state.kept[i] ? v : Math.floor(Math.random() * 6) + 1));
+      trace("dice updated to " + JSON.stringify(state.dice));
+      broadcastState();
+    } catch (e) {
+      const dbgEl = document.getElementById("debug-info");
+      if (dbgEl) {
+        dbgEl.textContent = "[CAUGHT in setTimeout] " + (e && e.message ? e.message : String(e)) + " | " + (e && e.stack ? e.stack.slice(0, 300) : "");
+        dbgEl.style.color = "#ff6b6b";
+      }
+    }
   }, 600);
 }
 
