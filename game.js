@@ -347,7 +347,7 @@ function buildInitialDeck() {
   const deck = {}; // cardId -> 残り枚数
   CARDS.forEach(c => {
     if (c.group === "0") {
-      deck[c.id] = Infinity; // 道化師・ペテン師は無制限
+      deck[c.id] = null; // 道化師・ペテン師は無制限（null=無制限。InfinityはPeerJSのBinaryPackシリアライズでエラーになるため使用不可）
     } else if (c.id === "queen" || c.id === "king") {
       deck[c.id] = 1; // 国王・王妃は1回のみ（王妃は国王とセット付与）
     } else {

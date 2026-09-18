@@ -10,7 +10,7 @@
 <body>
 
 <header>
-  <h1>👑 王への請願 <span style="font-size: 0.6rem; color: var(--color-text-dim); font-weight: normal;">v1.0.3</span></h1>
+  <h1>👑 王への請願 <span style="font-size: 0.6rem; color: var(--color-text-dim); font-weight: normal;">v1.0.4</span></h1>
   <div id="connection-status" style="font-size: 0.8rem; color: var(--color-text-dim);">未接続</div>
 </header>
 
@@ -427,7 +427,7 @@ function executeClaim(cardId) {
   }
 
   state.players[pId].cards.push(cardId);
-  if (state.deck[cardId] !== Infinity) {
+  if (state.deck[cardId] !== null) {
     state.deck[cardId] -= 1;
   }
   if (state.deck[cardId] <= 0) {
@@ -713,7 +713,7 @@ function render() {
     if (c.id === "queen") return; // 王妃は単独表示不要（国王取得時に自動付与）
 
     const remaining = state.deck[c.id];
-    const isSoldOut = remaining !== Infinity && remaining <= 0;
+    const isSoldOut = remaining !== null && remaining <= 0;
     const isOwnedByMe = myOwnedIds.includes(c.id);
     const isOwnedByOpponent = !isOwnedByMe && isSoldOut;
     const canClaim = claimableSet.has(c.id);
