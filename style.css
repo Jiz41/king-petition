@@ -403,6 +403,25 @@ input[type="text"]:focus {
   font-size: 0.82rem;
 }
 
+/* ---- ダイス追加即時選択パネル ---- */
+.add-die-panel-inner {
+  border: 2px dashed var(--color-gold);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 12px 0;
+}
+
+.add-die-panel-label {
+  color: var(--color-gold);
+  font-size: 0.88rem;
+  margin-bottom: 10px;
+}
+
+.add-die-panel-buttons {
+  display: flex;
+  gap: 10px;
+}
+
 /* ---- 効果発動モーダル ---- */
 .effect-target-label {
   font-size: 0.85rem;

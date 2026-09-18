@@ -220,6 +220,14 @@ function renderEffectModalBody() {
       }
     }
 
+  } else if (cardId === "queen") {
+    html += `<div class="effect-target-label">追加する未確定ダイスの目を選択</div>`;
+    html += valueButtons("newValue", "pickQueenValue");
+    if (effectModalState.values.newValue) {
+      html += `<div class="effect-selected-value">選択中: ${effectModalState.values.newValue}</div>`;
+      canConfirm = true;
+    }
+
   } else if (cardId === "maid") {
     html += renderTargetPicker(1);
     if (sel.length === 1) {
@@ -338,6 +346,11 @@ function pickMagicianValue(v) {
   renderEffectModalBody();
 }
 
+function pickQueenValue(v) {
+  effectModalState.values.newValue = v;
+  renderEffectModalBody();
+}
+
 function pickMaidAmount(amount) {
   effectModalState.values.amount = amount;
   renderEffectModalBody();
@@ -372,6 +385,9 @@ function buildEffectPayload(m) {
   } else if (m.cardId === "lady" || m.cardId === "noble") {
     if (sel.length === 0) return null;
     return { targetIdxs: sel.slice() };
+  } else if (m.cardId === "queen") {
+    if (!vals.newValue) return null;
+    return { newValue: vals.newValue };
   }
   return null;
 }
