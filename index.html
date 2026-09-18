@@ -10,7 +10,7 @@
 <body>
 
 <header>
-  <h1>👑 王への請願 <span style="font-size: 0.6rem; color: var(--color-text-dim); font-weight: normal;">v1.4.2</span></h1>
+  <h1>👑 王への請願 <span style="font-size: 0.6rem; color: var(--color-text-dim); font-weight: normal;">v1.5.0</span></h1>
   <div id="connection-status" style="font-size: 0.8rem; color: var(--color-text-dim);">未接続</div>
 </header>
 
@@ -117,9 +117,10 @@
     </ol>
 
     <h3 class="rule-group-title">カードの効果</h3>
-    <p class="rule-flow-text">道化師・下女・哲学者・天文学者・魔術師・錬金術師・女官・貴族・王妃・職人・衛兵・狩人・質屋・騎士・司教は、取得すると即座に発動するのではなく、そのカードを持っている間はずっと、自分がダイスを振っている最中（未確定ダイスが残っている間）ならいつでも効果を使える「恒久能力」になります（1手番につきカード1枚ごとに1回まで使えます）。</p>
+    <p class="rule-flow-text">道化師・下女・哲学者・天文学者・魔術師・錬金術師・女官・貴族・商人・王妃・職人・衛兵・狩人・質屋・騎士・司教は、取得すると即座に発動するのではなく、そのカードを持っている間はずっと、自分がダイスを振っている最中（未確定ダイスが残っている間）ならいつでも効果を使える「恒久能力」になります（1手番につきカード1枚ごとに1回まで使えます）。</p>
     <ul class="rule-flow-text">
       <li>職人・衛兵・狩人・質屋・騎士・司教は決まった目（職人=1、衛兵=2、狩人=3、質屋=4、騎士=5、司教=6）の、王妃は好きな目の、未確定ダイスを1個追加します。追加されたダイスは未確定ダイスとして扱われ、振り直すこともそのまま確定することもできます。どのカードで増えたものかは色で見分けられます</li>
+      <li>商人は、好きな数の未確定ダイスを選んでまとめて振り直せます</li>
       <li>農夫・将軍は例外で、取得すると次の手番以降ずっと基本のダイス数自体が増える永続効果です（この2種だけは「取得直後にダイスが1〜2個増える」形で、他のカードのような使うタイミングの選択はありません）</li>
     </ul>
 
@@ -173,7 +174,7 @@ let myPlayerId = null; // "host" または "guest"
 let state = null;
 
 // 恒久能力として実装する効果カード一覧
-const EFFECT_CARD_IDS = ["fool", "maid", "philosopher", "astronomer", "magician", "alchemist", "lady", "noble", "queen", "artisan", "guard", "hunter", "pawnbroker", "cavalier", "bishop"];
+const EFFECT_CARD_IDS = ["fool", "maid", "philosopher", "astronomer", "magician", "alchemist", "lady", "noble", "queen", "artisan", "guard", "hunter", "pawnbroker", "cavalier", "bishop", "trader"];
 
 // 目固定6種：カードid → 追加されるダイスの目
 const ADD_DIE_VALUE_MAP = { artisan: 1, guard: 2, hunter: 3, pawnbroker: 4, cavalier: 5, bishop: 6 };
@@ -712,6 +713,9 @@ function validateEffectPayload(cardId, payload) {
     if (!allTargetsUnkept(payload.targetIdxs)) return false;
     return payload.targetIdxs.every(idx => state.dice[idx] + 2 <= 6);
 
+  } else if (cardId === "trader") {
+    return allTargetsUnkept(payload.targetIdxs);
+
   } else if (cardId === "queen") {
     return isValidDieValue(payload.newValue);
 
@@ -750,6 +754,9 @@ function executeUseEffect(cardId, payload, playerId) {
 
   } else if (cardId === "noble") {
     payload.targetIdxs.forEach(idx => { state.dice[idx] += 2; });
+
+  } else if (cardId === "trader") {
+    payload.targetIdxs.forEach(idx => { state.dice[idx] = Math.floor(Math.random() * 6) + 1; });
 
   } else if (cardId === "queen") {
     if (!state.diceOrigin) state.diceOrigin = state.dice.map(() => null);

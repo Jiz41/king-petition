@@ -307,6 +307,16 @@ function renderEffectModalBody() {
     });
     html += `</div>`;
     canConfirm = sel.length > 0;
+
+  } else if (cardId === "trader") {
+    const list = unkeptDiceList();
+    html += `<div class="effect-target-label">好きな数だけ選択（振り直します）</div><div class="effect-dice-picker">`;
+    list.forEach(d => {
+      const selected = sel.includes(d.idx);
+      html += `<button type="button" class="effect-die-btn ${selected ? "selected" : ""}" onclick="toggleEffectTargetMulti(${d.idx})">${d.value}</button>`;
+    });
+    html += `</div>`;
+    canConfirm = sel.length > 0;
   }
 
   body.innerHTML = html;
@@ -387,6 +397,9 @@ function buildEffectPayload(m) {
     if (!vals.valA || !vals.valB || !vals.valC) return null;
     return { idxA: sel[0], idxB: sel[1], idxC: sel[2], newValueA: vals.valA, newValueB: vals.valB, newValueC: vals.valC };
   } else if (m.cardId === "lady" || m.cardId === "noble") {
+    if (sel.length === 0) return null;
+    return { targetIdxs: sel.slice() };
+  } else if (m.cardId === "trader") {
     if (sel.length === 0) return null;
     return { targetIdxs: sel.slice() };
   } else if (m.cardId === "queen") {
