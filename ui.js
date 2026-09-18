@@ -132,6 +132,10 @@ function renderEffectsPanel() {
 
 // ---- モーダルの開閉 ----
 function openEffectModal(cardId) {
+  if (typeof ADD_DIE_VALUE_MAP !== "undefined" && cardId in ADD_DIE_VALUE_MAP) {
+    sendUseEffect(cardId, {});
+    return;
+  }
   effectModalState = { cardId: cardId, sel: [], values: {} };
   document.getElementById("effect-modal-title").textContent = `${getCardById(cardId).name}の効果を使う`;
   document.getElementById("effect-modal").style.display = "flex";

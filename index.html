@@ -10,7 +10,7 @@
 <body>
 
 <header>
-  <h1>👑 王への請願 <span style="font-size: 0.6rem; color: var(--color-text-dim); font-weight: normal;">v1.3.2</span></h1>
+  <h1>👑 王への請願 <span style="font-size: 0.6rem; color: var(--color-text-dim); font-weight: normal;">v1.4.0</span></h1>
   <div id="connection-status" style="font-size: 0.8rem; color: var(--color-text-dim);">未接続</div>
 </header>
 
@@ -62,7 +62,6 @@
       <div class="play-area">
         <h3>手元のダイス（クリックで確保/解除）</h3>
         <div class="dice-container" id="dice-container"></div>
-        <div id="add-die-panel" class="add-die-panel" style="display:none;"></div>
         <div class="action-buttons">
           <button id="btn-roll" onclick="handleRollDice()">🎲 ダイスを振る</button>
           <button id="btn-confirm" onclick="handleFinishRolling()">✋ 確定してカードを見る</button>
@@ -115,10 +114,10 @@
     </ol>
 
     <h3 class="rule-group-title">カードの効果</h3>
-    <p class="rule-flow-text">カードの効果は2種類に分かれます。</p>
+    <p class="rule-flow-text">道化師・下女・哲学者・天文学者・魔術師・錬金術師・女官・貴族・王妃・職人・衛兵・狩人・質屋・騎士・司教は、取得すると即座に発動するのではなく、そのカードを持っている間はずっと、自分がダイスを振っている最中（未確定ダイスが残っている間）ならいつでも効果を使える「恒久能力」になります（1手番につきカード1枚ごとに1回まで使えます）。</p>
     <ul class="rule-flow-text">
-      <li>道化師・下女・哲学者・天文学者・魔術師・錬金術師・女官・貴族・王妃：取得すると、そのカードを持っている間はずっと、自分がダイスを振っている最中（未確定ダイスが残っている間）ならいつでも効果を使える「恒久能力」になります（1手番につきカード1枚ごとに1回まで使えます）</li>
-      <li>職人・衛兵・狩人・質屋・騎士・司教：取得した瞬間、決まった目（職人=1、衛兵=2、狩人=3、質屋=4、騎士=5、司教=6）の未確定ダイスを追加するかその場で選べます。追加すれば、そのダイスは未確定ダイスとして扱われ、振り直すこともそのまま確定することもできます。追加されたダイスは、どのカードで増えたものか色で見分けられます</li>
+      <li>職人・衛兵・狩人・質屋・騎士・司教は決まった目（職人=1、衛兵=2、狩人=3、質屋=4、騎士=5、司教=6）の、王妃は好きな目の、未確定ダイスを1個追加します。追加されたダイスは未確定ダイスとして扱われ、振り直すこともそのまま確定することもできます。どのカードで増えたものかは色で見分けられます</li>
+      <li>農夫・将軍は例外で、取得すると次の手番以降ずっと基本のダイス数自体が増える永続効果です（この2種だけは「取得直後にダイスが1〜2個増える」形で、他のカードのような使うタイミングの選択はありません）</li>
     </ul>
 
     <h3 class="rule-group-title">国王を取ったら（ファイナルラウンド）</h3>
@@ -171,9 +170,9 @@ let myPlayerId = null; // "host" または "guest"
 let state = null;
 
 // 恒久能力として実装する効果カード一覧
-const EFFECT_CARD_IDS = ["fool", "maid", "philosopher", "astronomer", "magician", "alchemist", "lady", "noble", "queen"];
+const EFFECT_CARD_IDS = ["fool", "maid", "philosopher", "astronomer", "magician", "alchemist", "lady", "noble", "queen", "artisan", "guard", "hunter", "pawnbroker", "cavalier", "bishop"];
 
-// executeAddDieDecision()の目固定6種：カードid → 追加されるダイスの目
+// 目固定6種：カードid → 追加されるダイスの目
 const ADD_DIE_VALUE_MAP = { artisan: 1, guard: 2, hunter: 3, pawnbroker: 4, cavalier: 5, bishop: 6 };
 
 function createInitialState(hostName) {
@@ -183,7 +182,7 @@ function createInitialState(hostName) {
     },
     order: ["host"],
     turnIdx: 0,
-    phase: "rolling", // rolling / claiming / choosing_add_die / ended
+    phase: "rolling", // rolling / claiming / ended
     dice: [1, 1, 1],
     kept: [false, false, false],
     diceOrigin: [null, null, null], // 各ダイスの由来（null=基本ダイス/通常ROLL、cardId=そのカード効果で追加）
@@ -191,7 +190,6 @@ function createInitialState(hostName) {
     claimedBy: {}, // cardId -> playerId
     winner: null,
     keptSnapshotAfterRoll: null,
-    pendingAddDieCard: null, // choosing_add_dieフェーズ中に選択待ちのカードid
     finalRoundKingHolder: null, // 国王を取得したplayerId
     finalRoundStage: 0, // 0=通常, 1=相手の最終手番待ち, 2=国王取得者の最終手番待ち
   };
@@ -331,10 +329,6 @@ function handleHostAction(data) {
     }
   } else if (data.action === "USE_EFFECT") {
     attemptUseEffect(data.cardId, data.payload, data.senderPlayerId);
-  } else if (data.action === "ADD_DIE_DECISION") {
-    if (isCurrentTurn(data.senderPlayerId) && state.phase === "choosing_add_die") {
-      executeAddDieDecision(data.addDie);
-    }
   }
 }
 
@@ -498,12 +492,6 @@ function executeClaim(cardId) {
   if (card.effectType === "extra_at_start") {
     const bonus = cardId === "general" ? 2 : 1;
     state.players[pId].diceCount += bonus;
-  } else if (card.effectType === "add_die") {
-    // 職人・衛兵・狩人・質屋・騎士・司教：その場で追加するか即時選択させる
-    state.pendingAddDieCard = cardId;
-    state.phase = "choosing_add_die";
-    broadcastState();
-    return;
   }
 
   // 国王取得時、王妃も同時付与。即勝利ではなくファイナルラウンドを開始する
@@ -515,31 +503,6 @@ function executeClaim(cardId) {
   }
 
   nextTurn();
-}
-
-// choosing_add_dieフェーズ中の「追加する/しない」決定を処理する
-function executeAddDieDecision(addDie) {
-  const cardId = state.pendingAddDieCard;
-  if (addDie) {
-    const newValue = ADD_DIE_VALUE_MAP[cardId];
-    if (!state.diceOrigin) state.diceOrigin = state.dice.map(() => null);
-    state.dice.push(newValue);
-    state.kept.push(false);
-    state.diceOrigin.push(cardId);
-    state.keptSnapshotAfterRoll = null; // 新ダイス追加により初回ROLL相当にリセット
-  }
-  state.pendingAddDieCard = null;
-  state.phase = "rolling";
-  broadcastState();
-}
-
-// クライアント側エントリポイント：ADD_DIE_DECISIONを送信する
-function sendAddDieDecision(addDie) {
-  if (p2p.isHost) {
-    executeAddDieDecision(addDie);
-  } else {
-    p2p.send({ type: "ACTION", action: "ADD_DIE_DECISION", addDie: addDie, senderPlayerId: myPlayerId });
-  }
 }
 
 // ファイナルラウンドの勝敗判定。各プレイヤーの最終ダイスから最大の同目グループを比較
@@ -647,7 +610,8 @@ function canUseEffectNow(cardId) {
   if (!state || !isMyTurn() || state.phase !== "rolling") return false;
   if (ownedCardCount(myPlayerId, cardId) <= 0) return false;
   if (usedEffectCount(myPlayerId, cardId) >= ownedCardCount(myPlayerId, cardId)) return false;
-  if (cardId !== "queen" && !state.kept.some(k => !k)) return false; // 未確定ダイスが1個も無い（王妃は新規追加のため対象外）
+  const isNewDieCard = cardId === "queen" || (typeof ADD_DIE_VALUE_MAP !== "undefined" && cardId in ADD_DIE_VALUE_MAP);
+  if (!isNewDieCard && !state.kept.some(k => !k)) return false; // 未確定ダイスが1個も無い（新規ダイス追加系は対象外）
   return true;
 }
 
@@ -739,6 +703,9 @@ function validateEffectPayload(cardId, payload) {
 
   } else if (cardId === "queen") {
     return isValidDieValue(payload.newValue);
+
+  } else if (cardId in ADD_DIE_VALUE_MAP) {
+    return true;
   }
 
   return false;
@@ -778,6 +745,12 @@ function executeUseEffect(cardId, payload, playerId) {
     state.dice.push(payload.newValue);
     state.kept.push(false);
     state.diceOrigin.push("queen");
+
+  } else if (cardId in ADD_DIE_VALUE_MAP) {
+    if (!state.diceOrigin) state.diceOrigin = state.dice.map(() => null);
+    state.dice.push(ADD_DIE_VALUE_MAP[cardId]);
+    state.kept.push(false);
+    state.diceOrigin.push(cardId);
   }
 
   const p = state.players[playerId];
@@ -838,11 +811,6 @@ function render() {
   // フェーズ表示
   if (state.winner) {
     updatePhaseDisplay("ended");
-  } else if (state.phase === "choosing_add_die") {
-    const phaseEl = document.getElementById("phase-info");
-    if (phaseEl) {
-      phaseEl.textContent = myTurn ? "🎲 ダイスを追加するか選んでください" : "⏳ 相手がダイス追加を選択中です";
-    }
   } else if (state.finalRoundStage) {
     updatePhaseDisplay("final_roll");
   } else if (!myTurn) {
@@ -851,27 +819,6 @@ function render() {
     updatePhaseDisplay(state.kept.some(k => k) ? "keeping" : "rolling");
   } else if (state.phase === "claiming") {
     updatePhaseDisplay("claiming");
-  }
-
-  // ダイス追加選択パネル（choosing_add_dieフェーズ・自分の手番のみ表示）
-  const addDiePanel = document.getElementById("add-die-panel");
-  if (addDiePanel) {
-    if (state.phase === "choosing_add_die" && myTurn && state.pendingAddDieCard) {
-      const card = getCardById(state.pendingAddDieCard);
-      addDiePanel.style.display = "block";
-      addDiePanel.innerHTML = `
-        <div class="add-die-panel-inner">
-          <div class="add-die-panel-label">「${card ? card.name : state.pendingAddDieCard}」を獲得しました。${card ? card.effectText : ""}</div>
-          <div class="add-die-panel-buttons">
-            <button onclick="sendAddDieDecision(true)">追加する</button>
-            <button class="secondary" onclick="sendAddDieDecision(false)">追加しない</button>
-          </div>
-        </div>
-      `;
-    } else {
-      addDiePanel.style.display = "none";
-      addDiePanel.innerHTML = "";
-    }
   }
 
   // ダイス描画
