@@ -10,7 +10,7 @@
 <body>
 
 <header>
-  <h1>👑 王への請願 <span style="font-size: 0.6rem; color: var(--color-text-dim); font-weight: normal;">v1.4.0</span></h1>
+  <h1>👑 王への請願 <span style="font-size: 0.6rem; color: var(--color-text-dim); font-weight: normal;">v1.4.1</span></h1>
   <div id="connection-status" style="font-size: 0.8rem; color: var(--color-text-dim);">未接続</div>
 </header>
 
@@ -124,7 +124,7 @@
     <p class="rule-flow-text">国王（同じ目が7つ揃った状態）を取得しても、その瞬間に勝利が決まるわけではありません。</p>
     <ol class="rule-flow-text">
       <li>国王を取得すると同時に王妃も手に入り、「ファイナルラウンド」が始まります</li>
-      <li>通常のターン順のまま、まず相手が、続いて国王を取得した本人が、それぞれ1回ずつ普通の手番（ダイスを振ってカードを取る、という通常通りの流れ）を行います</li>
+      <li>通常のターン順のまま、まず相手が、続いて国王を取得した本人が、それぞれ1回ずつダイスを振って確定します。ファイナルラウンド中はカードを取得するステップがなく、どんな出目を確定させるかだけが勝負です（持っているカードの恒久能力は引き続き使えます）</li>
       <li>両者が1回ずつ手番を終えたら、それぞれの最終的なダイスの中で「最も多く同じ目が揃った個数」を比べます</li>
       <li>個数が多い方の勝ちです。個数が同じ場合は、その目の大小で比べます（例えば、3個の6のゾロ目より、4個の1のゾロ目の方が強くなります）</li>
       <li>個数も目もまったくの同点だった場合は、もう一周（再び相手の手番から）ファイナルラウンドをやり直します</li>
@@ -320,8 +320,12 @@ function handleHostAction(data) {
     }
   } else if (data.action === "CONFIRM") {
     if (isCurrentTurn(data.senderPlayerId)) {
-      state.phase = "claiming";
-      broadcastState("phase_claiming");
+      if (state.finalRoundStage) {
+        nextTurn();
+      } else {
+        state.phase = "claiming";
+        broadcastState("phase_claiming");
+      }
     }
   } else if (data.action === "CLAIM") {
     if (isCurrentTurn(data.senderPlayerId)) {
@@ -443,8 +447,12 @@ function handleFinishRolling() {
     return;
   }
   if (p2p.isHost) {
-    state.phase = "claiming";
-    broadcastState();
+    if (state.finalRoundStage) {
+      nextTurn();
+    } else {
+      state.phase = "claiming";
+      broadcastState();
+    }
   } else {
     p2p.send({ type: "ACTION", action: "CONFIRM", senderPlayerId: myPlayerId });
   }
@@ -847,6 +855,10 @@ function render() {
   const canAct = myTurn && !state.winner;
   document.getElementById("btn-roll").disabled = !canAct || state.phase !== "rolling" || !canRollAgain();
   document.getElementById("btn-confirm").disabled = !canAct || state.phase !== "rolling" || !state.kept.some(k => k);
+  const confirmBtn = document.getElementById("btn-confirm");
+  if (confirmBtn) {
+    confirmBtn.textContent = state.finalRoundStage ? "✋ 確定する" : "✋ 確定してカードを見る";
+  }
 
   renderEffectsPanel();
 
