@@ -64,6 +64,7 @@
           <button id="btn-roll" onclick="handleRollDice()">🎲 ダイスを振る</button>
           <button id="btn-confirm" onclick="handleFinishRolling()">✋ 確定してカードを見る</button>
         </div>
+        <div id="effects-panel" class="effects-panel"></div>
       </div>
 
       <h3 style="margin-bottom: 10px; color: var(--color-text-dim); font-size: 0.9rem;">キャラクターカード一覧</h3>
@@ -73,6 +74,21 @@
     <div class="sidebar">
       <h3 style="color: var(--color-gold); margin-bottom: 12px;">対戦者</h3>
       <div id="players-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== 効果発動モーダル ===================== -->
+<div id="effect-modal" class="modal-overlay">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 id="effect-modal-title">効果を使う</h2>
+      <button class="secondary" onclick="closeEffectModal()">閉じる ✕</button>
+    </div>
+    <div id="effect-modal-body"></div>
+    <div class="effect-modal-footer">
+      <button class="secondary" onclick="closeEffectModal()">キャンセル</button>
+      <button id="effect-modal-confirm" disabled onclick="confirmEffectModal()">確定</button>
     </div>
   </div>
 </div>
@@ -106,10 +122,13 @@ let myPlayerId = null; // "host" または "guest"
 // state: ホストが正（権威）を持つ、ゲーム全体の状態
 let state = null;
 
+// 恒久能力として実装する効果カード一覧
+const EFFECT_CARD_IDS = ["fool", "maid", "philosopher", "astronomer", "magician", "alchemist", "lady", "noble"];
+
 function createInitialState(hostName) {
   return {
     players: {
-      host: { name: hostName, diceCount: 3, cards: [], extraDiceNextTurn: 0 },
+      host: { name: hostName, diceCount: 3, cards: [], extraDiceNextTurn: 0, usedEffects: {} },
     },
     order: ["host"],
     turnIdx: 0,
@@ -203,7 +222,7 @@ function handleJoinRoom() {
 // ---- 受信データの処理 ----
 function handleIncomingData(data) {
   if (data.type === "JOIN" && p2p.isHost) {
-    state.players.guest = { name: data.name, diceCount: 3, cards: [], extraDiceNextTurn: 0 };
+    state.players.guest = { name: data.name, diceCount: 3, cards: [], extraDiceNextTurn: 0, usedEffects: {} };
     state.order.push("guest");
     showGameScreen();
     broadcastState();
@@ -236,6 +255,8 @@ function handleHostAction(data) {
     if (isCurrentTurn(data.senderPlayerId)) {
       executeClaim(data.cardId);
     }
+  } else if (data.action === "USE_EFFECT") {
+    attemptUseEffect(data.cardId, data.payload, data.senderPlayerId);
   }
 }
 
@@ -382,6 +403,7 @@ function executeClaim(cardId) {
 function nextTurn() {
   state.turnIdx = (state.turnIdx + 1) % state.order.length;
   const nextP = currentPlayerId();
+  state.players[nextP].usedEffects = {};
 
   const baseCount = state.players[nextP].diceCount || 3;
   const bonus = state.players[nextP].extraDiceNextTurn || 0;
@@ -393,6 +415,160 @@ function nextTurn() {
   state.phase = "rolling";
 
   broadcastState("turn_changed");
+}
+
+// ============================================================
+// カード恒久能力（USE_EFFECT）
+// ============================================================
+
+// プレイヤーがそのカードidを何枚所持しているか
+function ownedCardCount(playerId, cardId) {
+  const p = state.players[playerId];
+  if (!p) return 0;
+  return p.cards.filter(id => id === cardId).length;
+}
+
+// このプレイヤーが今手番中にそのカードidを既に何回使ったか
+function usedEffectCount(playerId, cardId) {
+  const p = state.players[playerId];
+  if (!p || !p.usedEffects) return 0;
+  return p.usedEffects[cardId] || 0;
+}
+
+// 今、自分がこのカードの効果を発動できるか（UI用）
+function canUseEffectNow(cardId) {
+  if (!state || !isMyTurn() || state.phase !== "rolling") return false;
+  if (ownedCardCount(myPlayerId, cardId) <= 0) return false;
+  if (usedEffectCount(myPlayerId, cardId) >= ownedCardCount(myPlayerId, cardId)) return false;
+  if (!state.kept.some(k => !k)) return false; // 未確定ダイスが1個も無い
+  return true;
+}
+
+// クライアント側エントリポイント：USE_EFFECTを送信する
+function sendUseEffect(cardId, payload) {
+  if (p2p.isHost) {
+    attemptUseEffect(cardId, payload, myPlayerId);
+  } else {
+    p2p.send({ type: "ACTION", action: "USE_EFFECT", cardId: cardId, payload: payload, senderPlayerId: myPlayerId });
+  }
+}
+
+// ホスト側：検証してから実行する
+function attemptUseEffect(cardId, payload, playerId) {
+  if (!isCurrentTurn(playerId)) return;
+  if (state.phase !== "rolling") return;
+  if (ownedCardCount(playerId, cardId) <= 0) return;
+  if (usedEffectCount(playerId, cardId) >= ownedCardCount(playerId, cardId)) return;
+  if (!EFFECT_CARD_IDS.includes(cardId)) return;
+  if (!validateEffectPayload(cardId, payload)) return;
+
+  executeUseEffect(cardId, payload, playerId);
+}
+
+// 対象idx配列が全て未確定ダイスかを検証
+function allTargetsUnkept(idxs) {
+  if (!Array.isArray(idxs) || idxs.length === 0) return false;
+  const seen = new Set();
+  for (const idx of idxs) {
+    if (typeof idx !== "number" || !Number.isInteger(idx)) return false;
+    if (idx < 0 || idx >= state.dice.length) return false;
+    if (state.kept[idx]) return false;
+    if (seen.has(idx)) return false; // 同一ダイスの重複指定は不可
+    seen.add(idx);
+  }
+  return true;
+}
+
+function isValidDieValue(v) {
+  return typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= 6;
+}
+
+// カード固有バリデーション（payload形式は発注書2-3の通り）
+function validateEffectPayload(cardId, payload) {
+  if (!payload || typeof payload !== "object") return false;
+
+  if (cardId === "fool") {
+    return allTargetsUnkept([payload.targetIdx]);
+
+  } else if (cardId === "maid") {
+    if (!allTargetsUnkept([payload.targetIdx])) return false;
+    if (![1, 2, 3].includes(payload.amount)) return false;
+    const newValue = state.dice[payload.targetIdx] + payload.amount;
+    return newValue <= 6;
+
+  } else if (cardId === "philosopher") {
+    if (!allTargetsUnkept([payload.idxA, payload.idxB])) return false;
+    if (payload.idxA === payload.idxB) return false;
+    if (!isValidDieValue(payload.newValueA) || !isValidDieValue(payload.newValueB)) return false;
+    const origSum = state.dice[payload.idxA] + state.dice[payload.idxB];
+    return (payload.newValueA + payload.newValueB) === origSum;
+
+  } else if (cardId === "astronomer") {
+    if (!allTargetsUnkept([payload.targetIdx])) return false;
+    if (!isValidDieValue(payload.sourceValue)) return false;
+    const keptValues = state.dice.filter((v, i) => state.kept[i]);
+    return keptValues.includes(payload.sourceValue);
+
+  } else if (cardId === "magician") {
+    if (!allTargetsUnkept([payload.targetIdx])) return false;
+    return isValidDieValue(payload.newValue);
+
+  } else if (cardId === "alchemist") {
+    const idxs = [payload.idxA, payload.idxB, payload.idxC];
+    if (!allTargetsUnkept(idxs)) return false;
+    if (new Set(idxs).size !== 3) return false;
+    if (!isValidDieValue(payload.newValueA) || !isValidDieValue(payload.newValueB) || !isValidDieValue(payload.newValueC)) return false;
+    const origSum = state.dice[payload.idxA] + state.dice[payload.idxB] + state.dice[payload.idxC];
+    const newSum = payload.newValueA + payload.newValueB + payload.newValueC;
+    return origSum === newSum;
+
+  } else if (cardId === "lady") {
+    if (!allTargetsUnkept(payload.targetIdxs)) return false;
+    return payload.targetIdxs.every(idx => state.dice[idx] !== 6);
+
+  } else if (cardId === "noble") {
+    if (!allTargetsUnkept(payload.targetIdxs)) return false;
+    return payload.targetIdxs.every(idx => state.dice[idx] + 2 <= 6);
+  }
+
+  return false;
+}
+
+// ホスト側：実際にダイスを更新する
+function executeUseEffect(cardId, payload, playerId) {
+  if (cardId === "fool") {
+    state.dice[payload.targetIdx] = Math.floor(Math.random() * 6) + 1;
+
+  } else if (cardId === "maid") {
+    state.dice[payload.targetIdx] = state.dice[payload.targetIdx] + payload.amount;
+
+  } else if (cardId === "philosopher") {
+    state.dice[payload.idxA] = payload.newValueA;
+    state.dice[payload.idxB] = payload.newValueB;
+
+  } else if (cardId === "astronomer") {
+    state.dice[payload.targetIdx] = payload.sourceValue;
+
+  } else if (cardId === "magician") {
+    state.dice[payload.targetIdx] = payload.newValue;
+
+  } else if (cardId === "alchemist") {
+    state.dice[payload.idxA] = payload.newValueA;
+    state.dice[payload.idxB] = payload.newValueB;
+    state.dice[payload.idxC] = payload.newValueC;
+
+  } else if (cardId === "lady") {
+    payload.targetIdxs.forEach(idx => { state.dice[idx] += 1; });
+
+  } else if (cardId === "noble") {
+    payload.targetIdxs.forEach(idx => { state.dice[idx] += 2; });
+  }
+
+  const p = state.players[playerId];
+  if (!p.usedEffects) p.usedEffects = {};
+  p.usedEffects[cardId] = (p.usedEffects[cardId] || 0) + 1;
+
+  broadcastState();
 }
 
 // ---- 画面表示 ----
@@ -456,6 +632,8 @@ function render() {
   const canAct = myTurn && !state.winner;
   document.getElementById("btn-roll").disabled = !canAct || state.phase !== "rolling";
   document.getElementById("btn-confirm").disabled = !canAct || state.phase !== "rolling" || !state.kept.some(k => k);
+
+  renderEffectsPanel();
 
   // カード一覧描画
   const grid = document.getElementById("cards-grid");

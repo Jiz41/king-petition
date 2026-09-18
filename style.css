@@ -382,6 +382,113 @@ input[type="text"]:focus {
   background: #362a44;
 }
 
+/* ---- 使用可能な効果パネル ---- */
+.effects-panel-label {
+  font-size: 0.8rem;
+  color: var(--color-text-dim);
+  margin: 14px 0 8px;
+}
+
+.effects-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.effect-use-btn {
+  background: var(--color-panel);
+  color: var(--color-gold);
+  border: 1px solid var(--color-gold);
+  padding: 8px 14px;
+  font-size: 0.82rem;
+}
+
+/* ---- 効果発動モーダル ---- */
+.effect-target-label {
+  font-size: 0.85rem;
+  color: var(--color-text-dim);
+  margin: 12px 0 8px;
+}
+
+.effect-dice-picker,
+.effect-value-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.effect-die-btn,
+.effect-value-btn {
+  width: 44px;
+  height: 44px;
+  background: #14101a;
+  color: var(--color-text);
+  border: 2px solid var(--color-border);
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: bold;
+}
+
+.effect-die-btn.selected,
+.effect-value-btn.selected {
+  border-color: var(--color-gold);
+  background: var(--color-gold);
+  color: #2a1f0d;
+}
+
+.effect-selected-value {
+  margin-top: 10px;
+  font-size: 0.85rem;
+  color: var(--color-text-dim);
+}
+
+.effect-selected-value.ok {
+  color: var(--color-success);
+  font-weight: bold;
+}
+
+.effect-selected-value.ng {
+  color: var(--color-danger);
+  font-weight: bold;
+}
+
+.effect-hint {
+  font-size: 0.8rem;
+  color: var(--color-text-dim);
+  margin-top: 6px;
+}
+
+.effect-swap-selects {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.effect-swap-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.85rem;
+}
+
+.effect-swap-item select {
+  background: #14101a;
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
+.effect-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-border);
+}
+
 /* ---- ルールモーダル ---- */
 .modal-overlay {
   display: none;

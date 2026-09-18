@@ -100,6 +100,282 @@ function highlightClaimableCards(dice, ownedCardIds, availableCardIds) {
   return claimable;
 }
 
+// ============================================================
+// カード恒久能力 UI（効果発動パネル＆モーダル）
+// ============================================================
+
+// 現在開いているモーダルの選択状態
+let effectModalState = null;
+
+// 「使用可能な効果」パネルの描画（rollingフェーズ・自分の手番のときのみ内容表示）
+function renderEffectsPanel() {
+  const panel = document.getElementById("effects-panel");
+  if (!panel || !state || typeof EFFECT_CARD_IDS === "undefined") return;
+
+  const myOwnedIds = state.players[myPlayerId]?.cards || [];
+  const ownedEffectCards = EFFECT_CARD_IDS.filter(id => myOwnedIds.includes(id));
+
+  if (ownedEffectCards.length === 0) {
+    panel.innerHTML = "";
+    return;
+  }
+
+  let html = `<div class="effects-panel-label">使用可能な効果</div><div class="effects-buttons">`;
+  ownedEffectCards.forEach(cardId => {
+    const card = getCardById(cardId);
+    const enabled = canUseEffectNow(cardId);
+    html += `<button class="effect-use-btn" ${enabled ? "" : "disabled"} onclick="openEffectModal('${cardId}')">${card.name}の効果を使う</button>`;
+  });
+  html += `</div>`;
+  panel.innerHTML = html;
+}
+
+// ---- モーダルの開閉 ----
+function openEffectModal(cardId) {
+  effectModalState = { cardId: cardId, sel: [], values: {} };
+  document.getElementById("effect-modal-title").textContent = `${getCardById(cardId).name}の効果を使う`;
+  document.getElementById("effect-modal").style.display = "flex";
+  renderEffectModalBody();
+}
+
+function closeEffectModal() {
+  effectModalState = null;
+  document.getElementById("effect-modal").style.display = "none";
+}
+
+function confirmEffectModal() {
+  if (!effectModalState) return;
+  const payload = buildEffectPayload(effectModalState);
+  if (!payload) return;
+  sendUseEffect(effectModalState.cardId, payload);
+  closeEffectModal();
+}
+
+// 未確定ダイスの現在値一覧（idx付き）
+function unkeptDiceList() {
+  return state.dice
+    .map((v, i) => ({ idx: i, value: v }))
+    .filter(d => !state.kept[d.idx]);
+}
+
+function keptDiceValues() {
+  return state.dice.filter((v, i) => state.kept[i]);
+}
+
+// 対象ダイス選択ボタン群を描画するHTMLを返す（maxCount: 選べる最大数）
+function renderTargetPicker(maxCount) {
+  const list = unkeptDiceList();
+  let html = `<div class="effect-target-label">対象の未確定ダイスを選択（${maxCount}個）</div><div class="effect-dice-picker">`;
+  list.forEach(d => {
+    const selected = effectModalState.sel.includes(d.idx);
+    html += `<button type="button" class="effect-die-btn ${selected ? "selected" : ""}" onclick="toggleEffectTarget(${d.idx}, ${maxCount})">${d.value}</button>`;
+  });
+  html += `</div>`;
+  return html;
+}
+
+function toggleEffectTarget(idx, maxCount) {
+  const sel = effectModalState.sel;
+  const pos = sel.indexOf(idx);
+  if (pos !== -1) {
+    sel.splice(pos, 1);
+  } else {
+    if (sel.length >= maxCount) return;
+    sel.push(idx);
+  }
+  renderEffectModalBody();
+}
+
+function valueButtons(name, onclickPrefix) {
+  let html = `<div class="effect-value-picker">`;
+  for (let v = 1; v <= 6; v++) {
+    html += `<button type="button" class="effect-value-btn" onclick="${onclickPrefix}(${v})">${v}</button>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+// モーダル本文をカード種別ごとに描画し、確定ボタンの有効/無効を更新する
+function renderEffectModalBody() {
+  const body = document.getElementById("effect-modal-body");
+  const confirmBtn = document.getElementById("effect-modal-confirm");
+  if (!body || !effectModalState) return;
+  const cardId = effectModalState.cardId;
+  const sel = effectModalState.sel;
+  let html = "";
+  let canConfirm = false;
+
+  if (cardId === "fool") {
+    html += renderTargetPicker(1);
+    canConfirm = sel.length === 1;
+
+  } else if (cardId === "magician") {
+    html += renderTargetPicker(1);
+    if (sel.length === 1) {
+      html += `<div class="effect-target-label">新しい目を選択</div>`;
+      html += valueButtons("newValue", "pickMagicianValue");
+      if (effectModalState.values.newValue) {
+        html += `<div class="effect-selected-value">選択中: ${effectModalState.values.newValue}</div>`;
+        canConfirm = true;
+      }
+    }
+
+  } else if (cardId === "maid") {
+    html += renderTargetPicker(1);
+    if (sel.length === 1) {
+      const cur = state.dice[sel[0]];
+      html += `<div class="effect-target-label">加算量を選択</div><div class="effect-value-picker">`;
+      [1, 2, 3].forEach(amount => {
+        const over = cur + amount > 6;
+        const active = effectModalState.values.amount === amount;
+        html += `<button type="button" class="effect-value-btn ${active ? "selected" : ""}" ${over ? "disabled" : ""} onclick="pickMaidAmount(${amount})">+${amount}</button>`;
+      });
+      html += `</div>`;
+      if (effectModalState.values.amount) canConfirm = true;
+    }
+
+  } else if (cardId === "astronomer") {
+    html += renderTargetPicker(1);
+    if (sel.length === 1) {
+      const kept = keptDiceValues();
+      html += `<div class="effect-target-label">確定済みダイスの目から選択</div><div class="effect-value-picker">`;
+      kept.forEach(v => {
+        const active = effectModalState.values.sourceValue === v;
+        html += `<button type="button" class="effect-value-btn ${active ? "selected" : ""}" onclick="pickAstronomerValue(${v})">${v}</button>`;
+      });
+      html += `</div>`;
+      if (kept.length === 0) html += `<p class="effect-hint">確定済みのダイスがありません</p>`;
+      if (effectModalState.values.sourceValue) canConfirm = true;
+    }
+
+  } else if (cardId === "philosopher") {
+    html += renderTargetPicker(2);
+    if (sel.length === 2) {
+      const origSum = state.dice[sel[0]] + state.dice[sel[1]];
+      html += `<div class="effect-target-label">元の合計: ${origSum}</div>`;
+      html += renderSwapSelects(sel, ["valA", "valB"]);
+      const a = effectModalState.values.valA, b = effectModalState.values.valB;
+      if (a && b) {
+        const newSum = a + b;
+        html += `<div class="effect-selected-value ${newSum === origSum ? "ok" : "ng"}">現在の合計: ${newSum}（${newSum === origSum ? "一致" : "不一致"}）</div>`;
+        canConfirm = newSum === origSum;
+      }
+    }
+
+  } else if (cardId === "alchemist") {
+    html += renderTargetPicker(3);
+    if (sel.length === 3) {
+      const origSum = sel.reduce((s, idx) => s + state.dice[idx], 0);
+      html += `<div class="effect-target-label">元の合計: ${origSum}</div>`;
+      html += renderSwapSelects(sel, ["valA", "valB", "valC"]);
+      const a = effectModalState.values.valA, b = effectModalState.values.valB, c = effectModalState.values.valC;
+      if (a && b && c) {
+        const newSum = a + b + c;
+        html += `<div class="effect-selected-value ${newSum === origSum ? "ok" : "ng"}">現在の合計: ${newSum}（${newSum === origSum ? "一致" : "不一致"}）</div>`;
+        canConfirm = newSum === origSum;
+      }
+    }
+
+  } else if (cardId === "lady") {
+    const list = unkeptDiceList().filter(d => d.value !== 6);
+    html += `<div class="effect-target-label">好きな数だけ選択（各+1、6のダイスは対象外）</div><div class="effect-dice-picker">`;
+    list.forEach(d => {
+      const selected = sel.includes(d.idx);
+      html += `<button type="button" class="effect-die-btn ${selected ? "selected" : ""}" onclick="toggleEffectTargetMulti(${d.idx})">${d.value}</button>`;
+    });
+    html += `</div>`;
+    canConfirm = sel.length > 0;
+
+  } else if (cardId === "noble") {
+    const list = unkeptDiceList().filter(d => d.value + 2 <= 6);
+    html += `<div class="effect-target-label">好きな数だけ選択（各+2、6を超えるダイスは対象外）</div><div class="effect-dice-picker">`;
+    list.forEach(d => {
+      const selected = sel.includes(d.idx);
+      html += `<button type="button" class="effect-die-btn ${selected ? "selected" : ""}" onclick="toggleEffectTargetMulti(${d.idx})">${d.value}</button>`;
+    });
+    html += `</div>`;
+    canConfirm = sel.length > 0;
+  }
+
+  body.innerHTML = html;
+  confirmBtn.disabled = !canConfirm;
+}
+
+// lady/noble用：上限なしの複数選択トグル
+function toggleEffectTargetMulti(idx) {
+  const sel = effectModalState.sel;
+  const pos = sel.indexOf(idx);
+  if (pos !== -1) sel.splice(pos, 1);
+  else sel.push(idx);
+  renderEffectModalBody();
+}
+
+// philosopher/alchemist用：選択した各ダイスへの新しい目セレクタ
+function renderSwapSelects(idxs, keys) {
+  let html = `<div class="effect-swap-selects">`;
+  idxs.forEach((idx, i) => {
+    const key = keys[i];
+    const cur = effectModalState.values[key] || "";
+    html += `<div class="effect-swap-item">
+      <span>ダイス${i + 1}（元:${state.dice[idx]}）→</span>
+      <select onchange="pickSwapValue('${key}', this.value)">
+        <option value="">選択</option>
+        ${[1,2,3,4,5,6].map(v => `<option value="${v}" ${String(cur) === String(v) ? "selected" : ""}>${v}</option>`).join("")}
+      </select>
+    </div>`;
+  });
+  html += `</div>`;
+  return html;
+}
+
+function pickSwapValue(key, value) {
+  effectModalState.values[key] = value ? parseInt(value, 10) : null;
+  renderEffectModalBody();
+}
+
+function pickMagicianValue(v) {
+  effectModalState.values.newValue = v;
+  renderEffectModalBody();
+}
+
+function pickMaidAmount(amount) {
+  effectModalState.values.amount = amount;
+  renderEffectModalBody();
+}
+
+function pickAstronomerValue(v) {
+  effectModalState.values.sourceValue = v;
+  renderEffectModalBody();
+}
+
+// 選択状態からACTION送信用payloadを組み立てる
+function buildEffectPayload(m) {
+  const sel = m.sel;
+  const vals = m.values;
+  if (m.cardId === "fool") {
+    return { targetIdx: sel[0] };
+  } else if (m.cardId === "magician") {
+    if (!vals.newValue) return null;
+    return { targetIdx: sel[0], newValue: vals.newValue };
+  } else if (m.cardId === "maid") {
+    if (!vals.amount) return null;
+    return { targetIdx: sel[0], amount: vals.amount };
+  } else if (m.cardId === "astronomer") {
+    if (!vals.sourceValue) return null;
+    return { targetIdx: sel[0], sourceValue: vals.sourceValue };
+  } else if (m.cardId === "philosopher") {
+    if (!vals.valA || !vals.valB) return null;
+    return { idxA: sel[0], idxB: sel[1], newValueA: vals.valA, newValueB: vals.valB };
+  } else if (m.cardId === "alchemist") {
+    if (!vals.valA || !vals.valB || !vals.valC) return null;
+    return { idxA: sel[0], idxB: sel[1], idxC: sel[2], newValueA: vals.valA, newValueB: vals.valB, newValueC: vals.valC };
+  } else if (m.cardId === "lady" || m.cardId === "noble") {
+    if (sel.length === 0) return null;
+    return { targetIdxs: sel.slice() };
+  }
+  return null;
+}
+
 // ---- コピー完了時のボタンフィードバック ----
 function flashCopyButton(buttonEl, originalText) {
   const prev = buttonEl.textContent;
