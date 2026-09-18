@@ -57,6 +57,8 @@
         <button class="secondary" onclick="openRuleModal()">📖 ルール</button>
       </div>
 
+      <div id="debug-info" style="font-size:0.65rem; color:#888; word-break:break-all; margin-bottom:10px; padding:6px; background:rgba(0,0,0,0.2); border-radius:6px;"></div>
+
       <div class="play-area">
         <h3>手元のダイス（クリックで確保/解除）</h3>
         <div class="dice-container" id="dice-container"></div>
@@ -586,6 +588,11 @@ function render() {
   const myTurn = isMyTurn();
 
   document.getElementById("turn-name").textContent = state.players[activeId]?.name || "-";
+
+  const dbgEl = document.getElementById("debug-info");
+  if (dbgEl) {
+    dbgEl.textContent = `[DEBUG] myId:${myPlayerId} isHost:${p2p.isHost} turn:${activeId} myTurn:${myTurn} phase:${state.phase} dice:${JSON.stringify(state.dice)} kept:${JSON.stringify(state.kept)}`;
+  }
 
   // 勝者表示
   const bannerContainer = document.getElementById("winner-banner-container");
