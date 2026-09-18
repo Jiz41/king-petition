@@ -117,6 +117,23 @@
 // メインゲーム進行ロジック
 // ============================================================
 
+// 調査用: 未処理エラーを画面のデバッグ欄に表示する（一時的）
+window.onerror = function(msg, url, line, col, error) {
+  const dbgEl = document.getElementById("debug-info");
+  if (dbgEl) {
+    dbgEl.textContent = "[JS ERROR] " + msg + " (line " + line + ":" + col + ")";
+    dbgEl.style.color = "#ff6b6b";
+  }
+  return false;
+};
+window.addEventListener("unhandledrejection", function(e) {
+  const dbgEl = document.getElementById("debug-info");
+  if (dbgEl) {
+    dbgEl.textContent = "[PROMISE ERROR] " + (e.reason && e.reason.message ? e.reason.message : String(e.reason));
+    dbgEl.style.color = "#ff6b6b";
+  }
+});
+
 const p2p = new P2PManager();
 let myName = "";
 let myPlayerId = null; // "host" または "guest"
