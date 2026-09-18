@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>👑 王への請願 (To Court the King)</title>
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <h1>👑 王への請願</h1>
+  <div id="connection-status" style="font-size: 0.8rem; color: var(--color-text-dim);">未接続</div>
+</header>
+
+<!-- ===================== ロビー画面 ===================== -->
+<div id="lobby" class="lobby">
+  <h2>ゲームを始める</h2>
+  <div class="input-group">
+    <label>あなたの名前</label>
+    <input type="text" id="playerName" placeholder="例: ケン" maxlength="12">
+  </div>
+
+  <button id="btn-create-room" onclick="handleCreateRoom()">部屋を作る（ホスト）</button>
+
+  <div id="host-room-display" style="display:none;">
+    <div class="room-id-display">
+      <div class="room-id-text" id="room-id-text">--------</div>
+      <button id="btn-copy-room-id" onclick="handleCopyRoomId()">📋 コピーする</button>
+    </div>
+    <p style="font-size: 0.8rem; color: var(--color-text-dim);">このコードをフレンドに送ってください</p>
+    <p id="waiting-text" style="margin-top: 10px; color: var(--color-gold);">フレンドの参加を待っています…</p>
+  </div>
+
+  <div class="lobby-divider">または</div>
+
+  <div class="input-group">
+    <label>ホストから受け取ったコード</label>
+    <input type="text" id="joinRoomId" placeholder="8文字のひらがなを貼り付け" maxlength="8">
+  </div>
+  <button id="btn-join-room" class="secondary" onclick="handleJoinRoom()">部屋に参加する</button>
+
+  <p id="lobby-error" style="color: var(--color-danger); margin-top: 12px; font-size: 0.85rem;"></p>
+</div>
+
+<!-- ===================== ゲーム画面 ===================== -->
+<div id="game-area" style="display: none;">
+
+  <div id="winner-banner-container"></div>
+
+  <div class="dashboard">
+    <div>
+      <div class="status-bar">
+        <div>現在の手番: <strong id="turn-name" style="color: var(--color-gold);">-</strong></div>
+        <div id="phase-info"></div>
+        <button class="secondary" onclick="openRuleModal()">📖 ルール</button>
+      </div>
+
+      <div class="play-area">
+        <h3>手元のダイス（クリックで確保/解除）</h3>
+        <div class="dice-container" id="dice-container"></div>
+        <div class="action-buttons">
+          <button id="btn-roll" onclick="handleRollDice()">🎲 ダイスを振る</button>
+          <button id="btn-confirm" onclick="handleFinishRolling()">✋ 確定してカードを見る</button>
+        </div>
+      </div>
+
+      <h3 style="margin-bottom: 10px; color: var(--color-text-dim); font-size: 0.9rem;">キャラクターカード一覧</h3>
+      <div class="cards-grid" id="cards-grid"></div>
+    </div>
+
+    <div class="sidebar">
+      <h3 style="color: var(--color-gold); margin-bottom: 12px;">対戦者</h3>
+      <div id="players-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== ルールモーダル ===================== -->
+<div id="rule-modal" class="modal-overlay">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>ルール一覧</h2>
+      <button class="secondary" onclick="closeRuleModal()">閉じる ✕</button>
+    </div>
+    <p style="font-size: 0.8rem; color: var(--color-text-dim); margin-bottom: 12px;">
+      同じ目が4つ揃った場合、「4つ組」と「ペア2組」の両方として扱われます（例: 6666は狩人にも天文学者にも該当）。
+    </p>
+    <div id="rule-modal-body"></div>
+  </div>
+</div>
+
+<script src="game.js"></script>
+<script src="p2p.js"></script>
+<script src="ui.js"></script>
+<script>
+// ============================================================
+// メインゲーム進行ロジック
+// ============================================================
+
+const p2p = new P2PManager();
+let myName = "";
+let myPlayerId = null; // "host" または "guest"
+
+// state: ホストが正（権威）を持つ、ゲーム全体の状態
+let state = null;
+
+function createInitialState(hostName) {
+  return {
+    players: {
+      host: { name: hostName, diceCount: 3, cards: [], extraDiceNextTurn: 0 },
+    },
+    order: ["host"],
+    turnIdx: 0,
+    phase: "rolling", // rolling / claiming / ended
+    dice: [1, 1, 1],
+    kept: [false, false, false],
+    deck: buildInitialDeck(), // cardId -> 残り枚数
+    claimedBy: {}, // cardId -> playerId
+    winner: null,
+  };
+}
+
+// ---- ロビー：部屋作成 ----
+function handleCreateRoom() {
+  myName = document.getElementById("playerName").value.trim() || "ホスト";
+  myPlayerId = "host";
+
+  document.getElementById("btn-create-room").disabled = true;
+  document.getElementById("btn-join-room").disabled = true;
+
+  p2p.onOpen = (roomId) => {
+    document.getElementById("host-room-display").style.display = "block";
+    document.getElementById("room-id-text").textContent = roomId;
+    document.getElementById("connection-status").textContent = "部屋を作成しました";
+    state = createInitialState(myName);
+  };
+
+  p2p.onPeerJoined = (conn) => {
+    document.getElementById("waiting-text").textContent = "フレンドが参加しました！";
+    // 相手にJOIN要求を促す（相手側からJOINデータが飛んでくるのを待つ）
+  };
+
+  p2p.onData = (data) => {
+    handleIncomingData(data);
+  };
+
+  p2p.onConnError = (err) => {
+    showToast("接続エラー: " + (err.type || err.message || "不明なエラー"));
+  };
+
+  p2p.createRoom();
+}
+
+async function handleCopyRoomId() {
+  const roomId = document.getElementById("room-id-text").textContent;
+  const btn = document.getElementById("btn-copy-room-id");
+  const success = await copyToClipboard(roomId);
+  if (success) {
+    flashCopyButton(btn, "📋 コピーする");
+  } else {
+    showToast("コピーに失敗しました。手動で選択してコピーしてください");
+  }
+}
+
+// ---- ロビー：参加 ----
+function handleJoinRoom() {
+  const hostId = document.getElementById("joinRoomId").value.trim();
+  const errorEl = document.getElementById("lobby-error");
+  errorEl.textContent = "";
+
+  if (!hostId || Array.from(hostId).length !== 8) {
+    errorEl.textContent = "8文字のひらがなコードを入力してください";
+    return;
+  }
+
+  myName = document.getElementById("playerName").value.trim() || "ゲスト";
+  myPlayerId = "guest";
+
+  document.getElementById("btn-create-room").disabled = true;
+  document.getElementById("btn-join-room").disabled = true;
+
+  p2p.onOpen = () => {
+    document.getElementById("connection-status").textContent = "接続完了";
+    p2p.send({ type: "JOIN", name: myName });
+    showGameScreen();
+  };
+
+  p2p.onData = (data) => {
+    handleIncomingData(data);
+  };
+
+  p2p.onConnError = (err) => {
+    errorEl.textContent = "接続に失敗しました。コードを確認してください";
+    document.getElementById("btn-create-room").disabled = false;
+    document.getElementById("btn-join-room").disabled = false;
+  };
+
+  p2p.joinRoom(hostId);
+}
+
+// ---- 受信データの処理 ----
+function handleIncomingData(data) {
+  if (data.type === "JOIN" && p2p.isHost) {
+    state.players.guest = { name: data.name, diceCount: 3, cards: [], extraDiceNextTurn: 0 };
+    state.order.push("guest");
+    showGameScreen();
+    broadcastState();
+  } else if (data.type === "SYNC" && !p2p.isHost) {
+    const prevPhase = state ? state.phase : null;
+    const prevTurnIdx = state ? state.turnIdx : null;
+    state = data.state;
+    handleSoundTriggers(data.event);
+    render();
+  } else if (data.type === "ACTION" && p2p.isHost) {
+    handleHostAction(data);
+  }
+}
+
+// ホストが受け取ったアクションを処理し、正としての判定を行う
+function handleHostAction(data) {
+  if (data.action === "ROLL") {
+    executeRoll();
+  } else if (data.action === "TOGGLE_KEEP") {
+    if (isCurrentTurn(data.senderPlayerId)) {
+      state.kept[data.idx] = !state.kept[data.idx];
+      broadcastState();
+    }
+  } else if (data.action === "CONFIRM") {
+    if (isCurrentTurn(data.senderPlayerId)) {
+      state.phase = "claiming";
+      broadcastState("phase_claiming");
+    }
+  } else if (data.action === "CLAIM") {
+    if (isCurrentTurn(data.senderPlayerId)) {
+      executeClaim(data.cardId);
+    }
+  }
+}
+
+function isCurrentTurn(playerId) {
+  return state.order[state.turnIdx] === playerId;
+}
+
+function currentPlayerId() {
+  return state.order[state.turnIdx];
+}
+
+function isMyTurn() {
+  return state && currentPlayerId() === myPlayerId;
+}
+
+// ---- ホスト側の状態送信 ----
+function broadcastState(event) {
+  if (!p2p.isHost) return;
+  p2p.send({ type: "SYNC", state: state, event: event });
+  handleSoundTriggers(event);
+  render();
+}
+
+// SEトリガーの再生（送信元と受信先の両方で同じイベント名から同じ音を鳴らす）
+function handleSoundTriggers(event) {
+  if (event === "turn_changed") {
+    playSound("turnChange");
+  }
+}
+
+// ---- ダイスロール ----
+function handleRollDice() {
+  if (!isMyTurn() || state.phase !== "rolling") return;
+  playSound("diceRoll");
+  if (p2p.isHost) {
+    executeRoll();
+  } else {
+    p2p.send({ type: "ACTION", action: "ROLL", senderPlayerId: myPlayerId });
+  }
+}
+
+function executeRoll() {
+  // アニメーション用に一旦rollingクラスを付与してから、少し遅れて出目を確定
+  const els = document.querySelectorAll(".dice-3d");
+  els.forEach((el, i) => {
+    if (!state.kept[i]) el.classList.add("rolling");
+  });
+
+  setTimeout(() => {
+    state.dice = state.dice.map((v, i) => (state.kept[i] ? v : Math.floor(Math.random() * 6) + 1));
+    broadcastState();
+  }, 600);
+}
+
+// ---- ダイス確保のトグル ----
+function toggleKeep(i) {
+  if (!isMyTurn() || state.phase !== "rolling") return;
+  playSound("diceLock");
+  if (p2p.isHost) {
+    state.kept[i] = !state.kept[i];
+    broadcastState();
+  } else {
+    p2p.send({ type: "ACTION", action: "TOGGLE_KEEP", idx: i, senderPlayerId: myPlayerId });
+  }
+}
+
+// ---- ロール確定→カード選択フェーズへ ----
+function handleFinishRolling() {
+  if (!isMyTurn() || state.phase !== "rolling") return;
+  // 最低1個は確保されている必要がある
+  if (!state.kept.some(k => k)) {
+    showToast("最低1個はダイスを確保してください");
+    return;
+  }
+  if (p2p.isHost) {
+    state.phase = "claiming";
+    broadcastState();
+  } else {
+    p2p.send({ type: "ACTION", action: "CONFIRM", senderPlayerId: myPlayerId });
+  }
+}
+
+// ---- カード取得 ----
+function claimCard(cardId) {
+  if (!isMyTurn() || state.phase !== "claiming") return;
+  if (p2p.isHost) {
+    executeClaim(cardId);
+  } else {
+    p2p.send({ type: "ACTION", action: "CLAIM", cardId: cardId, senderPlayerId: myPlayerId });
+  }
+}
+
+function executeClaim(cardId) {
+  const pId = currentPlayerId();
+  const keptDice = state.dice.filter((v, i) => state.kept[i]);
+  const ownedIds = state.players[pId].cards;
+  const availableIds = Object.keys(state.deck).filter(id => state.deck[id] > 0);
+
+  const claimable = getClaimableCards(keptDice, ownedIds, availableIds);
+  if (!claimable.includes(cardId)) {
+    // 不正な取得要求（判定不一致）は無視
+    return;
+  }
+
+  const card = getCardById(cardId);
+
+  // 道化師→ペテン師の入れ替え特例処理
+  if (cardId === "charlatan") {
+    const foolIdx = state.players[pId].cards.indexOf("fool");
+    if (foolIdx !== -1) state.players[pId].cards.splice(foolIdx, 1);
+  }
+
+  state.players[pId].cards.push(cardId);
+  if (state.deck[cardId] !== Infinity) {
+    state.deck[cardId] -= 1;
+  }
+  if (state.deck[cardId] <= 0) {
+    state.claimedBy[cardId] = pId; // 最後の1枚を取った人を「取り尽くした人」として記録（表示用）
+  }
+
+  // 効果適用：手番開始時ダイス増加系
+  if (card.effectType === "extra_at_start") {
+    const bonus = cardId === "general" ? 2 : 1;
+    state.players[pId].diceCount += bonus;
+  } else if (card.effectType === "add_die" || card.effectType === "add_die_choice") {
+    // 「追加ダイス」系は次の手番から基本ダイス数に加算する簡易実装
+    state.players[pId].diceCount += 1;
+  }
+
+  // 国王取得時、王妃も同時付与し、ゲーム終了（タイマン限定のため即勝利）
+  if (cardId === "king") {
+    state.players[pId].cards.push("queen");
+    state.deck["queen"] -= 1;
+    state.winner = pId;
+    state.phase = "ended";
+    broadcastState();
+    return;
+  }
+
+  nextTurn();
+}
+
+// ---- 手番交代 ----
+function nextTurn() {
+  state.turnIdx = (state.turnIdx + 1) % state.order.length;
+  const nextP = currentPlayerId();
+
+  const baseCount = state.players[nextP].diceCount || 3;
+  const bonus = state.players[nextP].extraDiceNextTurn || 0;
+  state.players[nextP].extraDiceNextTurn = 0;
+
+  const totalCount = baseCount + bonus;
+  state.dice = new Array(totalCount).fill(1).map(() => Math.floor(Math.random() * 6) + 1);
+  state.kept = new Array(totalCount).fill(false);
+  state.phase = "rolling";
+
+  broadcastState("turn_changed");
+}
+
+// ---- 画面表示 ----
+function showGameScreen() {
+  document.getElementById("lobby").style.display = "none";
+  document.getElementById("game-area").style.display = "block";
+  buildRuleModalContent();
+  if (state) render();
+}
+
+function render() {
+  if (!state) return;
+
+  const activeId = currentPlayerId();
+  const myTurn = isMyTurn();
+
+  document.getElementById("turn-name").textContent = state.players[activeId]?.name || "-";
+
+  // 勝者表示
+  const bannerContainer = document.getElementById("winner-banner-container");
+  if (state.winner) {
+    const winnerName = state.players[state.winner]?.name || "?";
+    bannerContainer.innerHTML = `<div class="winner-banner">🏆 ${winnerName} の勝利！国王の支持を得ました</div>`;
+  } else {
+    bannerContainer.innerHTML = "";
+  }
+
+  // フェーズ表示
+  if (state.winner) {
+    updatePhaseDisplay("ended");
+  } else if (!myTurn) {
+    updatePhaseDisplay("opponent_turn");
+  } else if (state.phase === "rolling") {
+    updatePhaseDisplay(state.kept.some(k => k) ? "keeping" : "rolling");
+  } else if (state.phase === "claiming") {
+    updatePhaseDisplay("claiming");
+  }
+
+  // ダイス描画
+  const container = document.getElementById("dice-container");
+  container.innerHTML = "";
+  const rotations = {
+    1: "rotateX(0deg)", 2: "rotateY(90deg)", 3: "rotateX(-90deg)",
+    4: "rotateX(90deg)", 5: "rotateY(-90deg)", 6: "rotateY(180deg)",
+  };
+  state.dice.forEach((v, i) => {
+    const wrap = document.createElement("div");
+    wrap.className = `dice-wrapper ${state.kept[i] ? "kept" : ""}`;
+    wrap.onclick = () => toggleKeep(i);
+    wrap.innerHTML = `<div class="dice-3d" style="transform:${rotations[v]}">
+      <div class="dice-face face-1"><div class="dot"></div></div>
+      <div class="dice-face face-2"><div class="dot"></div><div class="dot"></div></div>
+      <div class="dice-face face-3"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="dice-face face-4"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="dice-face face-5"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="dice-face face-6"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+    </div>`;
+    container.appendChild(wrap);
+  });
+
+  const canAct = myTurn && !state.winner;
+  document.getElementById("btn-roll").disabled = !canAct || state.phase !== "rolling";
+  document.getElementById("btn-confirm").disabled = !canAct || state.phase !== "rolling" || !state.kept.some(k => k);
+
+  // カード一覧描画
+  const grid = document.getElementById("cards-grid");
+  grid.innerHTML = "";
+
+  const keptDice = state.dice.filter((v, i) => state.kept[i]);
+  const myOwnedIds = state.players[myPlayerId]?.cards || [];
+  const availableIds = Object.keys(state.deck).filter(id => state.deck[id] > 0);
+  const claimableSet = (canAct && state.phase === "claiming")
+    ? new Set(getClaimableCards(keptDice, myOwnedIds, availableIds))
+    : new Set();
+
+  CARDS.forEach(c => {
+    if (c.id === "queen") return; // 王妃は単独表示不要（国王取得時に自動付与）
+
+    const remaining = state.deck[c.id];
+    const isSoldOut = remaining !== Infinity && remaining <= 0;
+    const isOwnedByMe = myOwnedIds.includes(c.id);
+    const isOwnedByOpponent = !isOwnedByMe && isSoldOut;
+    const canClaim = claimableSet.has(c.id);
+
+    const cardEl = document.createElement("div");
+    cardEl.className = `card-item ${canClaim ? "claimable" : ""} ${isOwnedByMe ? "claimed-mine" : ""} ${isOwnedByOpponent ? "claimed-opponent" : ""}`;
+    cardEl.dataset.cardId = c.id;
+
+    let statusHtml;
+    if (isOwnedByMe) {
+      statusHtml = `<small style="color: var(--color-gold);">あなたが所持</small>`;
+    } else if (isOwnedByOpponent) {
+      statusHtml = `<small style="color: var(--color-text-dim);">取得済み</small>`;
+    } else {
+      statusHtml = `<button ${canClaim ? "" : "disabled"} onclick="claimCard('${c.id}')">${canClaim ? "獲得する" : "条件未達成"}</button>`;
+    }
+
+    cardEl.innerHTML = `
+      <div>
+        <h4>${c.name}</h4>
+        <div class="cond">${c.reqText}</div>
+        <div class="effect">${c.effectText}</div>
+      </div>
+      <div>${statusHtml}</div>
+    `;
+    grid.appendChild(cardEl);
+  });
+
+  // プレイヤー一覧描画
+  const plist = document.getElementById("players-list");
+  plist.innerHTML = "";
+  state.order.forEach(id => {
+    const p = state.players[id];
+    if (!p) return;
+    const cardNames = p.cards
+      .filter(cid => cid !== "queen")
+      .map(cid => getCardById(cid)?.name)
+      .join("、") || "なし";
+    const pdiv = document.createElement("div");
+    pdiv.className = `player-card ${id === activeId ? "active" : ""}`;
+    pdiv.innerHTML = `
+      <div><strong>${p.name}</strong>${id === myPlayerId ? "（あなた）" : ""} 🎲${p.diceCount}個</div>
+      <div style="font-size:0.72rem; color: var(--color-text-dim); margin-top: 4px;">${cardNames}</div>
+    `;
+    plist.appendChild(pdiv);
+  });
+}
+</script>
+</body>
+</html>

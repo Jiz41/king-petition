@@ -1,0 +1,478 @@
+/* ============================================================
+   王への請願 - スタイル定義
+   中世宮廷風テイスト（深紅・金・濃紺を基調）
+   ============================================================ */
+
+:root {
+  --color-bg: #1a1420;
+  --color-panel: #241a2e;
+  --color-card: #2d2138;
+  --color-border: #4a3a5c;
+  --color-gold: #d4af37;
+  --color-gold-hover: #e8c458;
+  --color-crimson: #8b2942;
+  --color-text: #ece5d8;
+  --color-text-dim: #a89bb0;
+  --color-success: #4a9d5f;
+  --color-danger: #b0473f;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: "Hiragino Mincho ProN", "Yu Mincho", serif, sans-serif;
+  background: linear-gradient(160deg, var(--color-bg), #0f0a14);
+  color: var(--color-text);
+  min-height: 100vh;
+  padding: 16px;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px solid var(--color-gold);
+  padding-bottom: 12px;
+  margin-bottom: 20px;
+}
+
+h1 {
+  font-size: 1.3rem;
+  color: var(--color-gold);
+  letter-spacing: 0.05em;
+}
+
+button {
+  background: linear-gradient(160deg, var(--color-gold), #b8933a);
+  color: #2a1f0d;
+  border: none;
+  padding: 10px 18px;
+  font-weight: bold;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+
+button:hover:not(:disabled) {
+  background: linear-gradient(160deg, var(--color-gold-hover), var(--color-gold));
+  box-shadow: 0 0 10px rgba(212, 175, 55, 0.4);
+}
+
+button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+button:disabled {
+  background: #4a4550;
+  color: #8a8590;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+button.danger {
+  background: linear-gradient(160deg, var(--color-crimson), #6b1f30);
+  color: var(--color-text);
+}
+
+button.secondary {
+  background: var(--color-panel);
+  color: var(--color-gold);
+  border: 1px solid var(--color-gold);
+}
+
+/* ---- ロビー画面 ---- */
+.lobby {
+  background: var(--color-panel);
+  padding: 30px;
+  border-radius: 14px;
+  max-width: 480px;
+  margin: 60px auto;
+  border: 1px solid var(--color-border);
+  text-align: center;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+}
+
+.lobby h2 {
+  color: var(--color-gold);
+  margin-bottom: 20px;
+}
+
+.lobby-divider {
+  margin: 24px 0;
+  color: var(--color-text-dim);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.lobby-divider::before, .lobby-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--color-border);
+}
+
+.input-group {
+  margin-bottom: 14px;
+  text-align: left;
+}
+
+.input-group label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--color-text-dim);
+  margin-bottom: 5px;
+}
+
+input[type="text"] {
+  width: 100%;
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: #14101a;
+  color: var(--color-text);
+  font-size: 1rem;
+}
+
+input[type="text"]:focus {
+  outline: none;
+  border-color: var(--color-gold);
+}
+
+.room-id-display {
+  background: #14101a;
+  border: 2px dashed var(--color-gold);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 16px 0;
+}
+
+.room-id-text {
+  font-size: 1.6rem;
+  letter-spacing: 0.15em;
+  color: var(--color-gold);
+  font-weight: bold;
+  margin-bottom: 10px;
+  word-break: break-all;
+}
+
+/* ---- ゲーム画面 ---- */
+.dashboard {
+  display: grid;
+  grid-template-columns: 1fr 260px;
+  gap: 18px;
+}
+
+@media (max-width: 800px) {
+  .dashboard {
+    grid-template-columns: 1fr;
+  }
+}
+
+.status-bar {
+  background: var(--color-panel);
+  padding: 14px 18px;
+  border-radius: 10px;
+  margin-bottom: 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border: 1px solid var(--color-border);
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+#phase-info {
+  color: var(--color-gold);
+  font-weight: bold;
+}
+
+.play-area {
+  background: #14101a;
+  padding: 20px;
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  margin-bottom: 18px;
+}
+
+.play-area h3 {
+  font-size: 0.85rem;
+  color: var(--color-text-dim);
+  margin-bottom: 10px;
+  font-weight: normal;
+}
+
+/* ---- ダイス ---- */
+.dice-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  min-height: 90px;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.25);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.dice-wrapper {
+  perspective: 600px;
+  width: 56px;
+  height: 56px;
+  cursor: pointer;
+}
+
+.dice-3d {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.dice-face {
+  position: absolute;
+  width: 56px;
+  height: 56px;
+  background: #f4ecd8;
+  border: 2px solid var(--color-gold);
+  border-radius: 8px;
+  display: grid;
+  grid-template: repeat(3, 1fr) / repeat(3, 1fr);
+  padding: 5px;
+}
+
+.dot {
+  background-color: #2a1f2e;
+  border-radius: 50%;
+  align-self: center;
+  justify-self: center;
+  width: 9px;
+  height: 9px;
+  display: none;
+}
+
+.face-1 .dot:nth-child(1) { display: block; grid-area: 2 / 2; background-color: var(--color-crimson); width: 12px; height: 12px; }
+.face-2 .dot:nth-child(1) { display: block; grid-area: 1 / 1; }
+.face-2 .dot:nth-child(2) { display: block; grid-area: 3 / 3; }
+.face-3 .dot:nth-child(1) { display: block; grid-area: 1 / 1; }
+.face-3 .dot:nth-child(2) { display: block; grid-area: 2 / 2; }
+.face-3 .dot:nth-child(3) { display: block; grid-area: 3 / 3; }
+.face-4 .dot:nth-child(1) { display: block; grid-area: 1 / 1; }
+.face-4 .dot:nth-child(2) { display: block; grid-area: 1 / 3; }
+.face-4 .dot:nth-child(3) { display: block; grid-area: 3 / 1; }
+.face-4 .dot:nth-child(4) { display: block; grid-area: 3 / 3; }
+.face-5 .dot:nth-child(1) { display: block; grid-area: 1 / 1; }
+.face-5 .dot:nth-child(2) { display: block; grid-area: 1 / 3; }
+.face-5 .dot:nth-child(3) { display: block; grid-area: 2 / 2; }
+.face-5 .dot:nth-child(4) { display: block; grid-area: 3 / 1; }
+.face-5 .dot:nth-child(5) { display: block; grid-area: 3 / 3; }
+.face-6 .dot:nth-child(1) { display: block; grid-area: 1 / 1; }
+.face-6 .dot:nth-child(2) { display: block; grid-area: 1 / 3; }
+.face-6 .dot:nth-child(3) { display: block; grid-area: 2 / 1; }
+.face-6 .dot:nth-child(4) { display: block; grid-area: 2 / 3; }
+.face-6 .dot:nth-child(5) { display: block; grid-area: 3 / 1; }
+.face-6 .dot:nth-child(6) { display: block; grid-area: 3 / 3; }
+
+.face-1 { transform: translateZ(28px); }
+.face-6 { transform: rotateY(180deg) translateZ(28px); }
+.face-2 { transform: rotateY(-90deg) translateZ(28px); }
+.face-5 { transform: rotateY(90deg) translateZ(28px); }
+.face-3 { transform: rotateX(90deg) translateZ(28px); }
+.face-4 { transform: rotateX(-90deg) translateZ(28px); }
+
+.dice-wrapper.kept .dice-face {
+  background: var(--color-gold);
+  border-color: #8b6f1f;
+}
+
+@keyframes dice-rolling {
+  0% { transform: rotateX(0deg) rotateY(0deg); }
+  100% { transform: rotateX(1080deg) rotateY(720deg); }
+}
+
+.rolling {
+  animation: dice-rolling 0.6s ease-out;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* ---- カード一覧 ---- */
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.card-item {
+  background: var(--color-card);
+  border: 2px solid var(--color-border);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.card-item.claimable {
+  border-color: var(--color-success);
+  box-shadow: 0 0 12px rgba(74, 157, 95, 0.5);
+}
+
+.card-item.claimed-mine {
+  border-color: var(--color-gold);
+  opacity: 0.7;
+}
+
+.card-item.claimed-opponent {
+  opacity: 0.4;
+  background: #1a1420;
+}
+
+.card-item h4 {
+  color: var(--color-gold);
+  font-size: 0.95rem;
+  margin-bottom: 4px;
+}
+
+.card-item .cond {
+  font-size: 0.75rem;
+  color: #7fa8c9;
+  font-weight: bold;
+  margin-bottom: 4px;
+}
+
+.card-item .effect {
+  font-size: 0.72rem;
+  color: var(--color-text-dim);
+  margin-bottom: 8px;
+}
+
+/* ---- サイドバー（参加者一覧） ---- */
+.sidebar {
+  background: var(--color-panel);
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  height: fit-content;
+}
+
+.player-card {
+  background: var(--color-card);
+  padding: 10px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  border-left: 4px solid var(--color-border);
+  font-size: 0.85rem;
+}
+
+.player-card.active {
+  border-left-color: var(--color-gold);
+  background: #362a44;
+}
+
+/* ---- ルールモーダル ---- */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.7);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.modal-content {
+  background: var(--color-panel);
+  border: 2px solid var(--color-gold);
+  border-radius: 14px;
+  max-width: 700px;
+  width: 100%;
+  max-height: 85vh;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 12px;
+}
+
+.modal-header h2 {
+  color: var(--color-gold);
+}
+
+.rule-group-title {
+  color: var(--color-gold);
+  margin: 16px 0 8px;
+  font-size: 1rem;
+}
+
+.rule-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 10px;
+  font-size: 0.85rem;
+}
+
+.rule-table th, .rule-table td {
+  border: 1px solid var(--color-border);
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.rule-table th {
+  background: #362a44;
+  color: var(--color-gold);
+}
+
+/* ---- トースト通知 ---- */
+#toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--color-crimson);
+  color: var(--color-text);
+  padding: 12px 20px;
+  border-radius: 8px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s, transform 0.3s;
+  z-index: 2000;
+  max-width: 90vw;
+  text-align: center;
+}
+
+#toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ---- 勝利表示 ---- */
+.winner-banner {
+  background: linear-gradient(160deg, var(--color-gold), #b8933a);
+  color: #2a1f0d;
+  text-align: center;
+  padding: 16px;
+  border-radius: 10px;
+  font-size: 1.2rem;
+  font-weight: bold;
+  margin-bottom: 18px;
+}
