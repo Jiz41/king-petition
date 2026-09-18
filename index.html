@@ -10,7 +10,7 @@
 <body>
 
 <header>
-  <h1>👑 王への請願 <span style="font-size: 0.6rem; color: var(--color-text-dim); font-weight: normal;">v1.0.5</span></h1>
+  <h1>👑 王への請願 <span style="font-size: 0.6rem; color: var(--color-text-dim); font-weight: normal;">v1.0.6</span></h1>
   <div id="connection-status" style="font-size: 0.8rem; color: var(--color-text-dim);">未接続</div>
 </header>
 
@@ -410,7 +410,7 @@ function executeClaim(cardId) {
   const pId = currentPlayerId();
   const keptDice = state.dice.filter((v, i) => state.kept[i]);
   const ownedIds = state.players[pId].cards;
-  const availableIds = Object.keys(state.deck).filter(id => state.deck[id] > 0);
+  const availableIds = Object.keys(state.deck).filter(id => state.deck[id] === null || state.deck[id] > 0);
 
   const claimable = getClaimableCards(keptDice, ownedIds, availableIds);
   if (!claimable.includes(cardId)) {
@@ -430,7 +430,7 @@ function executeClaim(cardId) {
   if (state.deck[cardId] !== null) {
     state.deck[cardId] -= 1;
   }
-  if (state.deck[cardId] <= 0) {
+  if (state.deck[cardId] !== null && state.deck[cardId] <= 0) {
     state.claimedBy[cardId] = pId; // 最後の1枚を取った人を「取り尽くした人」として記録（表示用）
   }
 
@@ -704,7 +704,7 @@ function render() {
 
   const keptDice = state.dice.filter((v, i) => state.kept[i]);
   const myOwnedIds = state.players[myPlayerId]?.cards || [];
-  const availableIds = Object.keys(state.deck).filter(id => state.deck[id] > 0);
+  const availableIds = Object.keys(state.deck).filter(id => state.deck[id] === null || state.deck[id] > 0);
   const claimableSet = (canAct && state.phase === "claiming")
     ? new Set(getClaimableCards(keptDice, myOwnedIds, availableIds))
     : new Set();
