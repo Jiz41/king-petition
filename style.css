@@ -631,6 +631,17 @@ input[type="text"]:focus {
   color: var(--color-gold);
 }
 
+.rule-flow-text {
+  font-size: 0.85rem;
+  color: var(--color-text-dim);
+  margin: 0 0 10px;
+  padding-left: 1.2em;
+}
+
+.rule-flow-text li {
+  margin-bottom: 4px;
+}
+
 /* ---- トースト通知 ---- */
 #toast {
   position: fixed;
