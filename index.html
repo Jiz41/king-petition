@@ -10,7 +10,7 @@
 <body>
 
 <header>
-  <h1>👑 王への請願 <span style="font-size: 0.6rem; color: var(--color-text-dim); font-weight: normal;">v1.1.0</span></h1>
+  <h1>👑 王への請願 <span style="font-size: 0.6rem; color: var(--color-text-dim); font-weight: normal;">v1.2.0</span></h1>
   <div id="connection-status" style="font-size: 0.8rem; color: var(--color-text-dim);">未接続</div>
 </header>
 
@@ -147,7 +147,7 @@ const EFFECT_CARD_IDS = ["fool", "maid", "philosopher", "astronomer", "magician"
 function createInitialState(hostName) {
   return {
     players: {
-      host: { name: hostName, diceCount: 3, cards: [], extraDiceNextTurn: 0, usedEffects: {} },
+      host: { name: hostName, diceCount: 3, cards: [], extraDiceNextTurn: 0, usedEffects: {}, finalRoundDice: null },
     },
     order: ["host"],
     turnIdx: 0,
@@ -158,6 +158,8 @@ function createInitialState(hostName) {
     claimedBy: {}, // cardId -> playerId
     winner: null,
     keptSnapshotAfterRoll: null,
+    finalRoundKingHolder: null, // 国王を取得したplayerId
+    finalRoundStage: 0, // 0=通常, 1=相手の最終手番待ち, 2=国王取得者の最終手番待ち
   };
 }
 
@@ -248,7 +250,7 @@ function handleJoinRoom() {
 // ---- 受信データの処理 ----
 function handleIncomingData(data) {
   if (data.type === "JOIN" && p2p.isHost) {
-    state.players.guest = { name: data.name, diceCount: 3, cards: [], extraDiceNextTurn: 0, usedEffects: {} };
+    state.players.guest = { name: data.name, diceCount: 3, cards: [], extraDiceNextTurn: 0, usedEffects: {}, finalRoundDice: null };
     state.order.push("guest");
     showGameScreen();
     broadcastState();
@@ -463,24 +465,84 @@ function executeClaim(cardId) {
     state.players[pId].diceCount += 1;
   }
 
-  // 国王取得時、王妃も同時付与し、ゲーム終了（タイマン限定のため即勝利）
+  // 国王取得時、王妃も同時付与。即勝利ではなくファイナルラウンドを開始する
   if (cardId === "king") {
     state.players[pId].cards.push("queen");
     state.deck["queen"] -= 1;
-    state.winner = pId;
-    state.phase = "ended";
-    broadcastState();
-    return;
+    state.finalRoundKingHolder = pId;
+    state.finalRoundStage = 1; // 相手の最終手番待ち
   }
 
   nextTurn();
 }
 
+// ファイナルラウンドの勝敗判定。各プレイヤーの最終ダイスから最大の同目グループを比較
+function determineFinalWinner() {
+  const holderId = state.finalRoundKingHolder;
+  const opponentId = state.order.find(id => id !== holderId);
+
+  function maxGroup(dice) {
+    const c = {};
+    (dice || []).forEach(v => { c[v] = (c[v] || 0) + 1; });
+    let bestCount = 0, bestValue = 0;
+    Object.keys(c).forEach(vStr => {
+      const value = parseInt(vStr, 10);
+      const count = c[vStr];
+      if (count > bestCount || (count === bestCount && value > bestValue)) {
+        bestCount = count;
+        bestValue = value;
+      }
+    });
+    return { count: bestCount, value: bestValue };
+  }
+
+  const holderGroup = maxGroup(state.players[holderId].finalRoundDice);
+  const opponentGroup = maxGroup(state.players[opponentId].finalRoundDice);
+
+  if (opponentGroup.count > holderGroup.count) {
+    return { tie: false, winnerId: opponentId };
+  }
+  if (opponentGroup.count < holderGroup.count) {
+    return { tie: false, winnerId: holderId };
+  }
+  if (opponentGroup.value > holderGroup.value) {
+    return { tie: false, winnerId: opponentId };
+  }
+  if (opponentGroup.value < holderGroup.value) {
+    return { tie: false, winnerId: holderId };
+  }
+  return { tie: true };
+}
+
 // ---- 手番交代 ----
 function nextTurn() {
+  const finishedPlayer = currentPlayerId(); // ターン更新前、今手番を終えたプレイヤー
+
+  // ファイナルラウンド中なら、今終えた手番の最終ダイスを記録
+  if (state.finalRoundStage) {
+    state.players[finishedPlayer].finalRoundDice = state.dice.slice();
+  }
+
   state.turnIdx = (state.turnIdx + 1) % state.order.length;
   const nextP = currentPlayerId();
   state.players[nextP].usedEffects = {};
+
+  // ファイナルラウンドの進行判定
+  if (state.finalRoundStage === 2 && finishedPlayer === state.finalRoundKingHolder) {
+    // 国王取得者本人の最終手番が終わった → 判定
+    const result = determineFinalWinner();
+    if (result.tie) {
+      state.finalRoundStage = 1; // 同点、もう一周
+    } else {
+      state.winner = result.winnerId;
+      state.phase = "ended";
+      broadcastState("game_ended");
+      return; // 通常のダイス初期化はせずここで終了
+    }
+  } else if (state.finalRoundStage === 1 && finishedPlayer !== state.finalRoundKingHolder) {
+    // 相手の最終手番が終わった → 次は国王取得者本人の最終手番
+    state.finalRoundStage = 2;
+  }
 
   const baseCount = state.players[nextP].diceCount || 3;
   const bonus = state.players[nextP].extraDiceNextTurn || 0;
@@ -675,7 +737,24 @@ function render() {
   const bannerContainer = document.getElementById("winner-banner-container");
   if (state.winner) {
     const winnerName = state.players[state.winner]?.name || "?";
-    bannerContainer.innerHTML = `<div class="winner-banner">🏆 ${winnerName} の勝利！国王の支持を得ました</div>`;
+    let detail = "";
+    if (state.finalRoundKingHolder) {
+      const wDice = state.players[state.winner]?.finalRoundDice;
+      if (wDice) {
+        const c = {};
+        wDice.forEach(v => { c[v] = (c[v] || 0) + 1; });
+        let bestCount = 0, bestValue = 0;
+        Object.keys(c).forEach(vStr => {
+          const value = parseInt(vStr, 10);
+          const count = c[vStr];
+          if (count > bestCount || (count === bestCount && value > bestValue)) {
+            bestCount = count; bestValue = value;
+          }
+        });
+        if (bestCount > 0) detail = `（${bestValue}の目${bestCount}個）`;
+      }
+    }
+    bannerContainer.innerHTML = `<div class="winner-banner">🏆 ${winnerName} の勝利！国王の支持を得ました${detail}</div>`;
   } else {
     bannerContainer.innerHTML = "";
   }
@@ -683,6 +762,8 @@ function render() {
   // フェーズ表示
   if (state.winner) {
     updatePhaseDisplay("ended");
+  } else if (state.finalRoundStage) {
+    updatePhaseDisplay("final_roll");
   } else if (!myTurn) {
     updatePhaseDisplay("opponent_turn");
   } else if (state.phase === "rolling") {
