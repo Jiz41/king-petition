@@ -291,10 +291,19 @@ function isMyTurn() {
   return state && currentPlayerId() === myPlayerId;
 }
 
+// 調査用: 処理の到達確認トレース（一時的）
+window.__trace = [];
+function trace(msg) {
+  window.__trace.push(msg);
+  if (window.__trace.length > 6) window.__trace.shift();
+}
+
 // ---- ホスト側の状態送信 ----
 function broadcastState(event) {
+  trace("broadcastState start isHost=" + p2p.isHost);
   if (!p2p.isHost) return;
   p2p.send({ type: "SYNC", state: state, event: event });
+  trace("p2p.send done");
   handleSoundTriggers(event);
   render();
 }
@@ -308,6 +317,7 @@ function handleSoundTriggers(event) {
 
 // ---- ダイスロール ----
 function handleRollDice() {
+  trace("handleRollDice clicked isMyTurn=" + isMyTurn() + " phase=" + (state && state.phase));
   if (!isMyTurn() || state.phase !== "rolling") return;
   playSound("diceRoll");
   if (p2p.isHost) {
@@ -318,6 +328,7 @@ function handleRollDice() {
 }
 
 function executeRoll() {
+  trace("executeRoll start");
   // アニメーション用に一旦rollingクラスを付与してから、少し遅れて出目を確定
   const els = document.querySelectorAll(".dice-3d");
   els.forEach((el, i) => {
@@ -325,7 +336,9 @@ function executeRoll() {
   });
 
   setTimeout(() => {
+    trace("setTimeout fired, updating dice");
     state.dice = state.dice.map((v, i) => (state.kept[i] ? v : Math.floor(Math.random() * 6) + 1));
+    trace("dice updated to " + JSON.stringify(state.dice));
     broadcastState();
   }, 600);
 }
@@ -600,6 +613,7 @@ function showGameScreen() {
 
 function render() {
   if (!state) return;
+  trace("render called");
 
   const activeId = currentPlayerId();
   const myTurn = isMyTurn();
@@ -608,7 +622,7 @@ function render() {
 
   const dbgEl = document.getElementById("debug-info");
   if (dbgEl) {
-    dbgEl.textContent = `[DEBUG] myId:${myPlayerId} isHost:${p2p.isHost} turn:${activeId} myTurn:${myTurn} phase:${state.phase} dice:${JSON.stringify(state.dice)} kept:${JSON.stringify(state.kept)}`;
+    dbgEl.textContent = `[DEBUG] myId:${myPlayerId} isHost:${p2p.isHost} turn:${activeId} myTurn:${myTurn} phase:${state.phase} dice:${JSON.stringify(state.dice)} kept:${JSON.stringify(state.kept)} | TRACE: ${window.__trace.join(" > ")}`;
   }
 
   // 勝者表示
