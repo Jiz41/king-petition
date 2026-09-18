@@ -291,6 +291,69 @@ input[type="text"]:focus {
   border-color: #8b6f1f;
 }
 
+/* カード由来別のダイス色分け（追加ダイスがどのカード効果で得られたか視認するため） */
+.dice-wrapper.origin-artisan .dice-face {
+  background: #4a7856;
+  border-color: #6fa87e;
+}
+.dice-wrapper.origin-artisan .dot {
+  background-color: #f4ecd8;
+}
+.dice-wrapper.origin-guard .dice-face {
+  background: #3a5f7d;
+  border-color: #5f8bab;
+}
+.dice-wrapper.origin-guard .dot {
+  background-color: #f4ecd8;
+}
+.dice-wrapper.origin-hunter .dice-face {
+  background: #5c3a7d;
+  border-color: #8560ab;
+}
+.dice-wrapper.origin-hunter .dot {
+  background-color: #f4ecd8;
+}
+.dice-wrapper.origin-pawnbroker .dice-face {
+  background: #8a5a2a;
+  border-color: #bd8450;
+}
+.dice-wrapper.origin-pawnbroker .dot {
+  background-color: #f4ecd8;
+}
+.dice-wrapper.origin-cavalier .dice-face {
+  background: #7d3a4a;
+  border-color: #ab5f70;
+}
+.dice-wrapper.origin-cavalier .dot {
+  background-color: #f4ecd8;
+}
+.dice-wrapper.origin-bishop .dice-face {
+  background: #3a7d78;
+  border-color: #5fabab;
+}
+.dice-wrapper.origin-bishop .dot {
+  background-color: #f4ecd8;
+}
+.dice-wrapper.origin-queen .dice-face {
+  background: #b48ee0;
+  border-color: #d4b8f0;
+}
+.dice-wrapper.origin-queen .dot {
+  background-color: #2a1f2e;
+}
+
+/* keptと同時に付与された場合は、由来色を優先しつつkeptの金枠は残す */
+.dice-wrapper.kept.origin-artisan .dice-face,
+.dice-wrapper.kept.origin-guard .dice-face,
+.dice-wrapper.kept.origin-hunter .dice-face,
+.dice-wrapper.kept.origin-pawnbroker .dice-face,
+.dice-wrapper.kept.origin-cavalier .dice-face,
+.dice-wrapper.kept.origin-bishop .dice-face,
+.dice-wrapper.kept.origin-queen .dice-face {
+  border-color: var(--color-gold);
+  border-width: 3px;
+}
+
 @keyframes dice-rolling {
   0% { transform: rotateX(0deg) rotateY(0deg); }
   100% { transform: rotateX(1080deg) rotateY(720deg); }

@@ -10,7 +10,7 @@
 <body>
 
 <header>
-  <h1>👑 王への請願 <span style="font-size: 0.6rem; color: var(--color-text-dim); font-weight: normal;">v1.3.0</span></h1>
+  <h1>👑 王への請願 <span style="font-size: 0.6rem; color: var(--color-text-dim); font-weight: normal;">v1.3.1</span></h1>
   <div id="connection-status" style="font-size: 0.8rem; color: var(--color-text-dim);">未接続</div>
 </header>
 
@@ -158,6 +158,7 @@ function createInitialState(hostName) {
     phase: "rolling", // rolling / claiming / choosing_add_die / ended
     dice: [1, 1, 1],
     kept: [false, false, false],
+    diceOrigin: [null, null, null], // 各ダイスの由来（null=基本ダイス/通常ROLL、cardId=そのカード効果で追加）
     deck: buildInitialDeck(), // cardId -> 残り枚数
     claimedBy: {}, // cardId -> playerId
     winner: null,
@@ -493,8 +494,10 @@ function executeAddDieDecision(addDie) {
   const cardId = state.pendingAddDieCard;
   if (addDie) {
     const newValue = ADD_DIE_VALUE_MAP[cardId];
+    if (!state.diceOrigin) state.diceOrigin = state.dice.map(() => null);
     state.dice.push(newValue);
     state.kept.push(false);
+    state.diceOrigin.push(cardId);
     state.keptSnapshotAfterRoll = null; // 新ダイス追加により初回ROLL相当にリセット
   }
   state.pendingAddDieCard = null;
@@ -586,6 +589,7 @@ function nextTurn() {
   const totalCount = baseCount + bonus;
   state.dice = new Array(totalCount).fill(1).map(() => Math.floor(Math.random() * 6) + 1);
   state.kept = new Array(totalCount).fill(false);
+  state.diceOrigin = new Array(totalCount).fill(null);
   state.phase = "rolling";
   state.keptSnapshotAfterRoll = null;
 
@@ -742,8 +746,10 @@ function executeUseEffect(cardId, payload, playerId) {
     payload.targetIdxs.forEach(idx => { state.dice[idx] += 2; });
 
   } else if (cardId === "queen") {
+    if (!state.diceOrigin) state.diceOrigin = state.dice.map(() => null);
     state.dice.push(payload.newValue);
     state.kept.push(false);
+    state.diceOrigin.push("queen");
   }
 
   const p = state.players[playerId];
@@ -849,7 +855,8 @@ function render() {
   };
   state.dice.forEach((v, i) => {
     const wrap = document.createElement("div");
-    wrap.className = `dice-wrapper ${state.kept[i] ? "kept" : ""}`;
+    const originClass = (state.diceOrigin && state.diceOrigin[i]) ? `origin-${state.diceOrigin[i]}` : "";
+    wrap.className = `dice-wrapper ${state.kept[i] ? "kept" : ""} ${originClass}`;
     wrap.onclick = () => toggleKeep(i);
     wrap.innerHTML = `<div class="dice-3d" style="transform:${rotations[v]}">
       <div class="dice-face face-1"><div class="dot"></div></div>
